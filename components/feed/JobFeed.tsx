@@ -16,6 +16,7 @@ export default function JobFeed() {
   const [location, setLocation] = useState("");
   const [source, setSource] = useState("");
   const [dateRange, setDateRange] = useState("");
+  const [minSalary, setMinSalary] = useState(0);
   const [remoteOnly, setRemoteOnly] = useState(false);
   const [showDismissed, setShowDismissed] = useState(false);
 
@@ -64,6 +65,10 @@ export default function JobFeed() {
 
       if (location && job.location !== location) return false;
       if (source && job.source !== source) return false;
+      if (minSalary > 0) {
+        const salaryVal = job.salary_max ?? job.salary_min ?? 0;
+        if (salaryVal < minSalary * 1000) return false;
+      }
       if (remoteOnly && !job.is_remote) return false;
 
       if (dateRange && job.date_posted) {
@@ -75,7 +80,7 @@ export default function JobFeed() {
 
       return true;
     });
-  }, [jobs, search, location, source, dateRange, remoteOnly, showDismissed]);
+  }, [jobs, search, location, source, dateRange, minSalary, remoteOnly, showDismissed]);
 
   async function handleSave(job: Job) {
     const supabase = createClient();
@@ -120,6 +125,8 @@ export default function JobFeed() {
         onSourceChange={setSource}
         dateRange={dateRange}
         onDateRangeChange={setDateRange}
+        minSalary={minSalary}
+        onMinSalaryChange={setMinSalary}
         remoteOnly={remoteOnly}
         onRemoteOnlyChange={setRemoteOnly}
         showDismissed={showDismissed}

@@ -18,7 +18,6 @@ export function timeAgo(dateString: string | null): string {
 }
 
 export function formatSalary(min: number | null, max: number | null): string {
-  if (!min && !max) return "";
   const fmt = (n: number) => {
     if (n >= 1000) return `$${Math.round(n / 1000)}k`;
     return `$${n}`;
@@ -26,7 +25,13 @@ export function formatSalary(min: number | null, max: number | null): string {
   if (min && max) return `${fmt(min)} – ${fmt(max)}`;
   if (min) return `${fmt(min)}+`;
   if (max) return `Up to ${fmt(max)}`;
-  return "";
+  return "Salary not listed";
+}
+
+export function applicantColor(count: number): string {
+  if (count < 25) return "text-green-600";
+  if (count <= 100) return "text-yellow-600";
+  return "text-red-600";
 }
 
 export function daysSince(dateString: string | null): number | null {

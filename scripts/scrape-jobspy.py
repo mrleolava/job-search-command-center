@@ -60,6 +60,60 @@ def supabase_post(table: str, rows: list[dict]) -> int:
     return inserted
 
 
+def parse_salary(text: str | None) -> tuple[int | None, int | None]:
+    """Extract salary_min and salary_max from text."""
+    if not text:
+        return None, None
+
+    patterns = [
+        # $120,000 - $160,000
+        r'\$\s*([\d,]+)\s*[-–—to]+\s*\$\s*([\d,]+)',
+        # $120k - $160k
+        r'\$\s*(\d+)\s*k\s*[-–—to]+\s*\$\s*(\d+)\s*k',
+    ]
+    for pattern in patterns:
+        m = re.search(pattern, text, re.IGNORECASE)
+        if m:
+            v1 = int(m.group(1).replace(",", ""))
+            v2 = int(m.group(2).replace(",", ""))
+            if v1 < 1000:
+                v1 *= 1000
+            if v2 < 1000:
+                v2 *= 1000
+            if v1 >= 20000 and v2 >= 20000:
+                return v1, v2
+
+    # Single value: $120,000/year or $120k
+    single = re.search(r'\$\s*([\d,]+)\s*(?:/\s*(?:year|yr|annually))', text, re.IGNORECASE)
+    if single:
+        v = int(single.group(1).replace(",", ""))
+        if v < 1000:
+            v *= 1000
+        if v >= 20000:
+            return v, None
+
+    single_k = re.search(r'\$\s*(\d+)\s*k', text, re.IGNORECASE)
+    if single_k:
+        v = int(single_k.group(1)) * 1000
+        if v >= 20000:
+            return v, None
+
+    return None, None
+
+
+def safe_int(val) -> int | None:
+    """Safely convert a value to int, returning None for NaN/None."""
+    if val is None:
+        return None
+    try:
+        s = str(val)
+        if s in ("nan", "NaN", "None", ""):
+            return None
+        return int(float(s))
+    except (ValueError, TypeError):
+        return None
+
+
 def matches_keywords(title: str) -> bool:
     lower = title.lower()
     return any(kw.lower() in lower for kw in TITLE_KEYWORDS)
@@ -128,6 +182,16 @@ def main():
                     if s not in ("nan", "None", ""):
                         description = s
 
+                # Extract salary — JobSpy provides min/max_amount or interval
+                salary_min = safe_int(row.get("min_amount"))
+                salary_max = safe_int(row.get("max_amount"))
+                # If JobSpy didn't provide salary, try parsing description
+                if salary_min is None and salary_max is None and description:
+                    salary_min, salary_max = parse_salary(description)
+
+                # Extract applicant count (LinkedIn provides num_urgent_words or similar)
+                application_count = safe_int(row.get("num_urgent_words")) if row.get("num_urgent_words") is not None else None
+
                 all_jobs.append({
                     "company": company_name,
                     "title": title,
@@ -137,6 +201,9 @@ def main():
                     "source": site,
                     "is_remote": is_remote,
                     "description": description,
+                    "salary_min": salary_min,
+                    "salary_max": salary_max,
+                    "application_count": application_count,
                 })
 
         except Exception as e:
@@ -201,6 +268,9 @@ def main():
             "source": j["source"],
             "is_remote": j["is_remote"],
             "description": j["description"],
+            "salary_min": j["salary_min"],
+            "salary_max": j["salary_max"],
+            "application_count": j["application_count"],
             "is_dismissed": False,
         }
         for j in new_jobs

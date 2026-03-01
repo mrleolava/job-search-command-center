@@ -9,6 +9,8 @@ interface FilterBarProps {
   onSourceChange: (v: string) => void;
   dateRange: string;
   onDateRangeChange: (v: string) => void;
+  minSalary: number;
+  onMinSalaryChange: (v: number) => void;
   remoteOnly: boolean;
   onRemoteOnlyChange: (v: boolean) => void;
   showDismissed: boolean;
@@ -26,6 +28,8 @@ export default function FilterBar({
   onSourceChange,
   dateRange,
   onDateRangeChange,
+  minSalary,
+  onMinSalaryChange,
   remoteOnly,
   onRemoteOnlyChange,
   showDismissed,
@@ -78,6 +82,21 @@ export default function FilterBar({
           <option value="14">Last 14 days</option>
           <option value="30">Last 30 days</option>
         </select>
+        <div className="flex items-center gap-2 text-sm text-gray-700">
+          <span className="whitespace-nowrap">Min salary:</span>
+          <input
+            type="range"
+            min={0}
+            max={300}
+            step={25}
+            value={minSalary}
+            onChange={(e) => onMinSalaryChange(Number(e.target.value))}
+            className="w-24 accent-gray-900"
+          />
+          <span className="text-xs text-gray-500 w-12">
+            {minSalary > 0 ? `$${minSalary}k` : "Any"}
+          </span>
+        </div>
         <label className="flex items-center gap-1.5 text-sm text-gray-700 cursor-pointer">
           <input
             type="checkbox"

@@ -12,6 +12,49 @@ interface RawJob {
   date_posted: string | null;
   source: string;
   is_remote: boolean;
+  salary_min: number | null;
+  salary_max: number | null;
+  description: string | null;
+}
+
+// ---------- Salary parsing ----------
+
+function parseSalary(text: string | null): { min: number | null; max: number | null } {
+  if (!text) return { min: null, max: null };
+
+  // Match patterns like $120,000 - $160,000 or $120k-$160k or $120,000/yr
+  const patterns = [
+    // $120,000 - $160,000
+    /\$\s*([\d,]+)\s*(?:[-–—to]+)\s*\$\s*([\d,]+)/gi,
+    // $120k - $160k
+    /\$\s*(\d+)\s*k\s*(?:[-–—to]+)\s*\$\s*(\d+)\s*k/gi,
+    // $120,000/year or /yr (single value)
+    /\$\s*([\d,]+)\s*(?:\/\s*(?:year|yr|annually))/gi,
+    // $120k (single value near salary context)
+    /\$\s*(\d+)\s*k/gi,
+  ];
+
+  for (const pattern of patterns) {
+    const match = pattern.exec(text);
+    if (match) {
+      if (match[2]) {
+        // Range match
+        let min = parseInt(match[1].replace(/,/g, ""), 10);
+        let max = parseInt(match[2].replace(/,/g, ""), 10);
+        // If values are small (like 120, 160), they're in k
+        if (min < 1000) min *= 1000;
+        if (max < 1000) max *= 1000;
+        if (min >= 20000 && max >= 20000) return { min, max };
+      } else {
+        // Single value
+        let val = parseInt(match[1].replace(/,/g, ""), 10);
+        if (val < 1000) val *= 1000;
+        if (val >= 20000) return { min: val, max: null };
+      }
+    }
+  }
+
+  return { min: null, max: null };
 }
 
 // ---------- API fetchers ----------
@@ -25,16 +68,23 @@ async function fetchGreenhouseJobs(
     const res = await fetch(url);
     if (!res.ok) return [];
     const data = await res.json();
-    return (data.jobs ?? []).map((j: any) => ({
-      company: companyName,
-      title: j.title ?? "",
-      url: j.absolute_url ?? `https://boards.greenhouse.io/${slug}/jobs/${j.id}`,
-      location: j.location?.name ?? null,
-      date_posted: j.updated_at ?? j.first_published_at ?? null,
-      source: "greenhouse",
-      is_remote:
-        (j.location?.name ?? "").toLowerCase().includes("remote") || false,
-    }));
+    return (data.jobs ?? []).map((j: any) => {
+      const content = j.content ?? "";
+      const salary = parseSalary(content);
+      return {
+        company: companyName,
+        title: j.title ?? "",
+        url: j.absolute_url ?? `https://boards.greenhouse.io/${slug}/jobs/${j.id}`,
+        location: j.location?.name ?? null,
+        date_posted: j.updated_at ?? j.first_published_at ?? null,
+        source: "greenhouse",
+        is_remote:
+          (j.location?.name ?? "").toLowerCase().includes("remote") || false,
+        salary_min: salary.min,
+        salary_max: salary.max,
+        description: content || null,
+      };
+    });
   } catch {
     console.error(`  [greenhouse] Error fetching ${slug}`);
     return [];
@@ -50,17 +100,36 @@ async function fetchAshbyJobs(
     const res = await fetch(url);
     if (!res.ok) return [];
     const data = await res.json();
-    return (data.jobs ?? []).map((j: any) => ({
-      company: companyName,
-      title: j.title ?? "",
-      url: j.jobUrl ?? `https://jobs.ashbyhq.com/${slug}/${j.id}`,
-      location: j.location ?? null,
-      date_posted: j.publishedAt ?? null,
-      source: "ashby",
-      is_remote:
-        (j.location ?? "").toLowerCase().includes("remote") ||
-        j.isRemote === true,
-    }));
+    return (data.jobs ?? []).map((j: any) => {
+      const desc = j.descriptionPlain ?? j.description ?? "";
+      // Ashby provides compensation info in the job object
+      let salaryMin: number | null = null;
+      let salaryMax: number | null = null;
+      if (j.compensationTierSummary) {
+        const comp = parseSalary(j.compensationTierSummary);
+        salaryMin = comp.min;
+        salaryMax = comp.max;
+      }
+      if (!salaryMin && !salaryMax) {
+        const comp = parseSalary(desc);
+        salaryMin = comp.min;
+        salaryMax = comp.max;
+      }
+      return {
+        company: companyName,
+        title: j.title ?? "",
+        url: j.jobUrl ?? `https://jobs.ashbyhq.com/${slug}/${j.id}`,
+        location: j.location ?? null,
+        date_posted: j.publishedAt ?? null,
+        source: "ashby",
+        is_remote:
+          (j.location ?? "").toLowerCase().includes("remote") ||
+          j.isRemote === true,
+        salary_min: salaryMin,
+        salary_max: salaryMax,
+        description: desc || null,
+      };
+    });
   } catch {
     console.error(`  [ashby] Error fetching ${slug}`);
     return [];
@@ -188,6 +257,9 @@ async function main() {
     date_posted: j.date_posted,
     source: j.source,
     is_remote: j.is_remote,
+    salary_min: j.salary_min,
+    salary_max: j.salary_max,
+    description: j.description,
     is_dismissed: false,
   }));
 

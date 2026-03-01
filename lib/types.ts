@@ -14,6 +14,7 @@ export interface Job {
   is_remote: boolean | null;
   job_type: string | null;
   relevance_score: number | null;
+  application_count: number | null;
   is_dismissed: boolean;
   created_at: string;
 }

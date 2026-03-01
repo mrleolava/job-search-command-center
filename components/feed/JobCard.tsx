@@ -1,7 +1,7 @@
 "use client";
 
 import { Job } from "@/lib/types";
-import { timeAgo, formatSalary } from "@/lib/utils";
+import { timeAgo, formatSalary, applicantColor } from "@/lib/utils";
 
 interface JobCardProps {
   job: Job;
@@ -38,10 +38,16 @@ export default function JobCard({ job, onSave, onDismiss, isSaved }: JobCardProp
           </h3>
           <div className="flex flex-wrap gap-2 mt-2 text-sm text-gray-500">
             {job.location && <span>{job.location}</span>}
-            {salary && (
+            <span className="text-gray-300">·</span>
+            <span className={job.salary_min || job.salary_max ? "text-green-700 font-medium" : "text-gray-400"}>
+              {salary}
+            </span>
+            {job.application_count != null && (
               <>
                 <span className="text-gray-300">·</span>
-                <span>{salary}</span>
+                <span className={applicantColor(job.application_count)}>
+                  {job.application_count} applicants
+                </span>
               </>
             )}
             {job.date_posted && (

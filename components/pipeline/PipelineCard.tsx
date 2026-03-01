@@ -1,7 +1,7 @@
 "use client";
 
 import { Application, PipelineStage, PIPELINE_STAGES } from "@/lib/types";
-import { daysSince, capitalize } from "@/lib/utils";
+import { daysSince, capitalize, formatSalary } from "@/lib/utils";
 
 interface PipelineCardProps {
   application: Application;
@@ -22,6 +22,11 @@ export default function PipelineCard({ application, onStageChange, onClick }: Pi
       <div className="text-sm font-medium text-gray-900 mt-0.5 line-clamp-2">
         {job?.title ?? "Untitled"}
       </div>
+      {job && (
+        <div className={`text-xs mt-1 ${job.salary_min || job.salary_max ? "text-green-700 font-medium" : "text-gray-400"}`}>
+          {formatSalary(job.salary_min, job.salary_max)}
+        </div>
+      )}
       <div className="flex items-center justify-between mt-2">
         <span className="text-xs text-gray-400">
           {days !== null ? `${days}d ago` : ""}
