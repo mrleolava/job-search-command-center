@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase";
-import { Profile, WatchlistCompany, SearchConfig } from "@/lib/types";
+import { WatchlistCompany, SearchConfig } from "@/lib/types";
+import { useProfile } from "@/lib/useProfile";
 import ProfileSwitcher from "./ProfileSwitcher";
 import CompanyWatchlist from "./CompanyWatchlist";
 import TagEditor from "./TagEditor";
@@ -10,24 +11,9 @@ import ScrapeButton from "./ScrapeButton";
 
 export default function SettingsPage() {
   const supabase = createClient();
-  const [profiles, setProfiles] = useState<Profile[]>([]);
-  const [profileId, setProfileId] = useState<string>("");
+  const { profiles, profileId, setProfileId, loading } = useProfile();
   const [companies, setCompanies] = useState<WatchlistCompany[]>([]);
   const [config, setConfig] = useState<SearchConfig | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    async function loadProfiles() {
-      const { data } = await supabase.from("profiles").select("*").order("type");
-      if (data && data.length > 0) {
-        setProfiles(data);
-        setProfileId(data[0].id);
-      }
-      setLoading(false);
-    }
-    loadProfiles();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const fetchData = useCallback(async () => {
     if (!profileId) return;

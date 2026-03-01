@@ -2,13 +2,18 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { createClient } from "@/lib/supabase";
-import { Job } from "@/lib/types";
+import { Job, WatchlistCompany, SearchConfig } from "@/lib/types";
+import { useProfile } from "@/lib/useProfile";
+import ProfileSwitcher from "@/components/settings/ProfileSwitcher";
 import FilterBar from "./FilterBar";
 import JobList from "./JobList";
 
 export default function JobFeed() {
+  const { profiles, profileId, setProfileId, profileSlug, loading: profileLoading } = useProfile();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [savedJobIds, setSavedJobIds] = useState<Set<string>>(new Set());
+  const [watchlistCompanies, setWatchlistCompanies] = useState<WatchlistCompany[]>([]);
+  const [searchConfig, setSearchConfig] = useState<SearchConfig | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Filter state
@@ -22,10 +27,15 @@ export default function JobFeed() {
   const [showDismissed, setShowDismissed] = useState(false);
 
   useEffect(() => {
-    fetchData();
+    fetchJobs();
   }, []);
 
-  async function fetchData() {
+  useEffect(() => {
+    if (profileId) fetchProfileData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profileId]);
+
+  async function fetchJobs() {
     const supabase = createClient();
     const [jobsRes, appsRes] = await Promise.all([
       supabase.from("jobs").select("*").gt("seniority_score", 0).order("seniority_score", { ascending: false }).order("salary_max", { ascending: false, nullsFirst: false }),
@@ -40,6 +50,28 @@ export default function JobFeed() {
     setLoading(false);
   }
 
+  async function fetchProfileData() {
+    const supabase = createClient();
+    const [compRes, cfgRes] = await Promise.all([
+      supabase.from("watchlist_companies").select("*").eq("profile_id", profileId).order("name"),
+      supabase.from("search_configs").select("*").eq("profile_id", profileId).limit(1),
+    ]);
+    setWatchlistCompanies(compRes.data ?? []);
+    setSearchConfig(cfgRes.data?.[0] ?? null);
+  }
+
+  // Watchlist company names (lowercased for matching)
+  const watchlistNames = useMemo(
+    () => new Set(watchlistCompanies.map((c) => c.name.toLowerCase())),
+    [watchlistCompanies]
+  );
+
+  // Title keywords from search config (lowercased)
+  const titleKeywords = useMemo(
+    () => (searchConfig?.title_keywords ?? []).map((k) => k.toLowerCase()),
+    [searchConfig]
+  );
+
   // Derive unique locations and sources for filter dropdowns
   const locations = useMemo(
     () => Array.from(new Set(jobs.map((j) => j.location).filter(Boolean) as string[])).sort(),
@@ -53,6 +85,17 @@ export default function JobFeed() {
   // Client-side filtering and sorting
   const filteredJobs = useMemo(() => {
     const result = jobs.filter((job) => {
+      // Filter by watchlist companies
+      if (watchlistNames.size > 0 && job.company) {
+        if (!watchlistNames.has(job.company.toLowerCase())) return false;
+      }
+
+      // Filter by title keywords (match any)
+      if (titleKeywords.length > 0 && job.title) {
+        const titleLower = job.title.toLowerCase();
+        if (!titleKeywords.some((kw) => titleLower.includes(kw))) return false;
+      }
+
       if (!showDismissed && job.is_dismissed) return false;
 
       // Hide score=0 always; filter by min seniority
@@ -95,13 +138,13 @@ export default function JobFeed() {
     });
 
     return result;
-  }, [jobs, search, location, source, dateRange, minSalary, minSeniority, remoteOnly, showDismissed]);
+  }, [jobs, watchlistNames, titleKeywords, search, location, source, dateRange, minSalary, minSeniority, remoteOnly, showDismissed]);
 
   async function handleSave(job: Job) {
     const supabase = createClient();
     const { error } = await supabase
       .from("applications")
-      .insert({ job_id: job.id, stage: "saved", profile: "michael" });
+      .insert({ job_id: job.id, stage: "saved", profile: profileSlug });
     if (!error) {
       setSavedJobIds((prev) => new Set(prev).add(job.id));
     }
@@ -117,7 +160,7 @@ export default function JobFeed() {
     await supabase.from("jobs").update({ is_dismissed: newDismissed }).eq("id", job.id);
   }
 
-  if (loading) {
+  if (loading || profileLoading) {
     return (
       <div className="max-w-4xl mx-auto py-8 px-6">
         <p className="text-gray-500 text-center py-16">Loading jobs...</p>
@@ -129,7 +172,14 @@ export default function JobFeed() {
     <div className="max-w-4xl mx-auto py-6 px-6">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-bold text-gray-900">Job Feed</h1>
-        <span className="text-sm text-gray-500">{filteredJobs.length} jobs</span>
+        <div className="flex items-center gap-3">
+          <ProfileSwitcher
+            profiles={profiles}
+            activeProfileId={profileId}
+            onSwitch={setProfileId}
+          />
+          <span className="text-sm text-gray-500">{filteredJobs.length} jobs</span>
+        </div>
       </div>
       <FilterBar
         search={search}

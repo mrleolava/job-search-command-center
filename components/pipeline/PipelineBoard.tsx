@@ -3,14 +3,16 @@
 import { useState, useEffect, useMemo } from "react";
 import { createClient } from "@/lib/supabase";
 import { Application, PipelineStage, PIPELINE_STAGES } from "@/lib/types";
+import { useProfile } from "@/lib/useProfile";
+import ProfileSwitcher from "@/components/settings/ProfileSwitcher";
 import KanbanColumn from "./KanbanColumn";
 import ApplicationDetail from "./ApplicationDetail";
 
 export default function PipelineBoard() {
+  const { profiles, profileId, setProfileId, profileSlug, loading: profileLoading } = useProfile();
   const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedApp, setSelectedApp] = useState<Application | null>(null);
-  const [profileFilter, setProfileFilter] = useState("michael");
 
   useEffect(() => {
     fetchApplications();
@@ -27,9 +29,9 @@ export default function PipelineBoard() {
   }
 
   const filteredApplications = useMemo(() => {
-    if (profileFilter === "all") return applications;
-    return applications.filter((app) => app.profile === profileFilter);
-  }, [applications, profileFilter]);
+    if (!profileSlug) return applications;
+    return applications.filter((app) => app.profile === profileSlug);
+  }, [applications, profileSlug]);
 
   const groupedByStage = useMemo(() => {
     const groups: Record<PipelineStage, Application[]> = {
@@ -71,13 +73,7 @@ export default function PipelineBoard() {
     setSelectedApp(updated);
   }
 
-  // Derive unique profiles for the filter
-  const profiles = useMemo(
-    () => Array.from(new Set(applications.map((a) => a.profile))).sort(),
-    [applications]
-  );
-
-  if (loading) {
+  if (loading || profileLoading) {
     return (
       <div className="max-w-7xl mx-auto py-8 px-6">
         <p className="text-gray-500 text-center py-16">Loading pipeline...</p>
@@ -90,19 +86,11 @@ export default function PipelineBoard() {
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-bold text-gray-900">Pipeline</h1>
         <div className="flex items-center gap-3">
-          <label className="text-sm text-gray-600">Profile:</label>
-          <select
-            value={profileFilter}
-            onChange={(e) => setProfileFilter(e.target.value)}
-            className="border border-gray-300 rounded-md px-3 py-1.5 text-sm bg-white"
-          >
-            <option value="all">All</option>
-            {profiles.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </select>
+          <ProfileSwitcher
+            profiles={profiles}
+            activeProfileId={profileId}
+            onSwitch={setProfileId}
+          />
           <span className="text-sm text-gray-500">
             {filteredApplications.length} applications
           </span>
