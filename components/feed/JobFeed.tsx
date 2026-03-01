@@ -82,13 +82,16 @@ export default function JobFeed() {
     [jobs]
   );
 
+  const hasWatchlist = watchlistCompanies.length > 0;
+
   // Client-side filtering and sorting
   const filteredJobs = useMemo(() => {
+    // If no watchlist companies, show zero jobs (not all jobs)
+    if (!hasWatchlist) return [];
+
     const result = jobs.filter((job) => {
-      // Filter by watchlist companies
-      if (watchlistNames.size > 0 && job.company) {
-        if (!watchlistNames.has(job.company.toLowerCase())) return false;
-      }
+      // Filter by watchlist companies — always enforce
+      if (!job.company || !watchlistNames.has(job.company.toLowerCase())) return false;
 
       // Filter by title keywords (match any)
       if (titleKeywords.length > 0 && job.title) {
@@ -138,7 +141,7 @@ export default function JobFeed() {
     });
 
     return result;
-  }, [jobs, watchlistNames, titleKeywords, search, location, source, dateRange, minSalary, minSeniority, remoteOnly, showDismissed]);
+  }, [jobs, hasWatchlist, watchlistNames, titleKeywords, search, location, source, dateRange, minSalary, minSeniority, remoteOnly, showDismissed]);
 
   async function handleSave(job: Job) {
     const supabase = createClient();
@@ -201,12 +204,21 @@ export default function JobFeed() {
         locations={locations}
         sources={sources}
       />
-      <JobList
-        jobs={filteredJobs}
-        savedJobIds={savedJobIds}
-        onSave={handleSave}
-        onDismiss={handleDismiss}
-      />
+      {!hasWatchlist ? (
+        <div className="text-center py-16">
+          <p className="text-gray-500">No companies in your watchlist yet.</p>
+          <p className="text-gray-400 text-sm mt-1">
+            Go to <a href="/settings" className="text-blue-600 hover:underline">Settings</a> to add companies.
+          </p>
+        </div>
+      ) : (
+        <JobList
+          jobs={filteredJobs}
+          savedJobIds={savedJobIds}
+          onSave={handleSave}
+          onDismiss={handleDismiss}
+        />
+      )}
     </div>
   );
 }

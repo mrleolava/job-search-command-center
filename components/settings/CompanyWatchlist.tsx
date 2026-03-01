@@ -25,12 +25,16 @@ export default function CompanyWatchlist({
     name: string;
     greenhouse_slug: string | null;
     ashby_slug: string | null;
+    lever_slug: string | null;
     website: string | null;
   }) {
-    await supabase.from("watchlist_companies").insert({
+    const { error } = await supabase.from("watchlist_companies").insert({
       ...data,
       profile_id: profileId,
     });
+    if (error) {
+      console.error("Failed to add company:", error);
+    }
     setShowAddForm(false);
     onUpdate();
   }
@@ -41,16 +45,47 @@ export default function CompanyWatchlist({
       name: string;
       greenhouse_slug: string | null;
       ashby_slug: string | null;
+      lever_slug: string | null;
       website: string | null;
     }
   ) {
-    await supabase.from("watchlist_companies").update(data).eq("id", id);
+    const { error } = await supabase
+      .from("watchlist_companies")
+      .update(data)
+      .eq("id", id);
+    if (error) {
+      console.error("Failed to update company:", error);
+    }
     setEditingId(null);
     onUpdate();
   }
 
   async function handleDelete(id: string) {
-    await supabase.from("watchlist_companies").delete().eq("id", id);
+    // Find the company name before deleting so we can clean up jobs
+    const company = companies.find((c) => c.id === id);
+
+    // Delete the watchlist entry
+    const { error } = await supabase
+      .from("watchlist_companies")
+      .delete()
+      .eq("id", id);
+
+    if (error) {
+      console.error("Failed to delete company:", error);
+      return;
+    }
+
+    // Also delete jobs from this company
+    if (company) {
+      const { error: jobsError } = await supabase
+        .from("jobs")
+        .delete()
+        .ilike("company", company.name);
+      if (jobsError) {
+        console.error("Failed to delete jobs for company:", jobsError);
+      }
+    }
+
     setDeletingId(null);
     onUpdate();
   }
@@ -95,9 +130,10 @@ export default function CompanyWatchlist({
                 <span className="font-medium text-gray-900 text-sm">{co.name}</span>
                 <div className="flex gap-3 mt-0.5 text-xs text-gray-500">
                   {co.greenhouse_slug && <span>greenhouse: {co.greenhouse_slug}</span>}
+                  {co.lever_slug && <span>lever: {co.lever_slug}</span>}
                   {co.ashby_slug && <span>ashby: {co.ashby_slug}</span>}
                   {co.website && <span>{co.website}</span>}
-                  {!co.greenhouse_slug && !co.ashby_slug && (
+                  {!co.greenhouse_slug && !co.ashby_slug && !co.lever_slug && (
                     <span className="text-amber-600">No scraper slug</span>
                   )}
                 </div>
