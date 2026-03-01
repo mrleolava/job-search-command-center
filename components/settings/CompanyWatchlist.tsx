@@ -63,21 +63,25 @@ export default function CompanyWatchlist({
   async function handleDelete(id: string) {
     const company = companies.find((c) => c.id === id);
 
-    try {
-      const res = await fetch("/api/companies", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, companyName: company?.name ?? null }),
-      });
+    const { error } = await supabase
+      .from("watchlist_companies")
+      .delete()
+      .eq("id", id);
 
-      if (!res.ok) {
-        const data = await res.json();
-        console.error("Failed to delete company:", data.error);
-        return;
-      }
-    } catch (err) {
-      console.error("Failed to delete company:", err);
+    if (error) {
+      console.error("Failed to delete company:", error);
       return;
+    }
+
+    // Also delete jobs from this company
+    if (company) {
+      const { error: jobsError } = await supabase
+        .from("jobs")
+        .delete()
+        .ilike("company", company.name);
+      if (jobsError) {
+        console.error("Failed to delete jobs for company:", jobsError);
+      }
     }
 
     setDeletingId(null);
