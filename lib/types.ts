@@ -76,3 +76,21 @@ export interface Profile {
   name: string | null;
   type: string;
 }
+
+export interface WatchlistCompany {
+  id: string;
+  name: string;
+  greenhouse_slug: string | null;
+  ashby_slug: string | null;
+  lever_slug: string | null;
+  website: string | null;
+  profile_id: string;
+}
+
+export interface SearchConfig {
+  id: string;
+  profile_id: string;
+  title_keywords: string[];
+  exclude_keywords: string[];
+  locations: string[];
+}

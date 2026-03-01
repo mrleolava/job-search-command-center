@@ -8,6 +8,7 @@ const NAV_LINKS = [
   { href: "/pipeline", label: "Pipeline" },
   { href: "/companies", label: "Companies" },
   { href: "/analytics", label: "Analytics" },
+  { href: "/settings", label: "Settings" },
 ];
 
 export default function Navbar() {
