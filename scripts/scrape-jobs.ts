@@ -140,6 +140,52 @@ async function fetchAshbyJobs(
   }
 }
 
+// ---------- Seniority scoring ----------
+
+const ENTRY_LEVEL_TITLE_SIGNALS = [
+  "entry level", "entry-level", "junior", "associate", "intern", "internship",
+  "new grad", "graduate", "coordinator", "assistant", "analyst",
+  "specialist", "development representative",
+];
+
+function computeSeniorityScore(title: string, description: string | null): number {
+  const t = title.toLowerCase();
+  const d = (description ?? "").toLowerCase();
+
+  for (const signal of ENTRY_LEVEL_TITLE_SIGNALS) {
+    if (t.includes(signal)) return 0;
+  }
+  if (/\b(bdr|sdr)\b/i.test(t)) return 0;
+
+  if (/\b0[-–]2\s*years/i.test(d) || /\b1[-–]2\s*years/i.test(d) ||
+      /\b0[-–]3\s*years/i.test(d) || /\b1[-–]3\s*years/i.test(d) ||
+      /\b2[-–]4\s*years/i.test(d)) return 0;
+
+  let score = 0;
+  if (/\b(chief|cro|coo|cfo|ceo|cmo|cto|svp|senior vice president)\b/i.test(t) ||
+      /\bhead of\b/i.test(t)) {
+    score = 5;
+  } else if (/\b(vp|vice president)\b/i.test(t)) {
+    score = 4;
+  } else if (/\bdirector\b/i.test(t)) {
+    score = 3;
+  } else if (/\b(senior|lead|manager)\b/i.test(t)) {
+    score = 2;
+  } else if (/\b(enterprise|strategic)\b/i.test(t)) {
+    score = 1;
+  } else {
+    const hasExp = /\b[5-9]\+?\s*years/i.test(d) || /\b(?:10|12|15)\+?\s*years/i.test(d);
+    score = hasExp ? 1 : 0;
+  }
+
+  if (score > 0 && score < 5) {
+    if (/\b(?:10|12|15)\+?\s*years/i.test(d)) score = Math.min(5, score + 2);
+    else if (/\b[7-9]\+?\s*years/i.test(d)) score = Math.min(5, score + 1);
+  }
+
+  return score;
+}
+
 // ---------- Filtering ----------
 
 function matchesKeywords(title: string, keywords: string[]): boolean {
@@ -220,7 +266,7 @@ async function main() {
 
   console.log(`\nTotal raw jobs fetched: ${allRaw.length}`);
 
-  // 4. Filter by keywords, excludes, and location
+  // 4. Filter by keywords, excludes, location, and seniority
   const filtered = allRaw.filter((job) => {
     if (!matchesKeywords(job.title, titleKeywords)) return false;
     if (matchesExcludes(job.title, excludeKeywords)) return false;
@@ -228,25 +274,33 @@ async function main() {
     return true;
   });
 
-  console.log(`After filtering: ${filtered.length} matching jobs\n`);
+  console.log(`After keyword/location filtering: ${filtered.length}`);
 
-  if (filtered.length === 0) {
+  // Score seniority and remove score=0
+  const scored = filtered.map((j) => ({
+    ...j,
+    seniority_score: computeSeniorityScore(j.title, j.description),
+  }));
+  const senior = scored.filter((j) => j.seniority_score > 0);
+  console.log(`After seniority filtering: ${senior.length} (removed ${scored.length - senior.length} entry-level/unclear)\n`);
+
+  if (senior.length === 0) {
     console.log("No matching jobs found.");
     await backfillSalaries();
     return;
   }
 
   // 5. Deduplicate against existing jobs by URL
-  const urls = filtered.map((j) => j.url);
+  const urls = senior.map((j) => j.url);
   const { data: existing } = await supabase
     .from("jobs")
     .select("url")
     .in("url", urls);
   const existingUrls = new Set((existing ?? []).map((r: any) => r.url));
-  const newJobs = filtered.filter((j) => !existingUrls.has(j.url));
+  const newJobs = senior.filter((j) => !existingUrls.has(j.url));
 
   // Update salary/description for existing jobs that now have salary data from API
-  const existingWithSalary = filtered.filter(
+  const existingWithSalary = senior.filter(
     (j) => existingUrls.has(j.url) && (j.salary_min || j.salary_max)
   );
   if (existingWithSalary.length > 0) {
@@ -266,7 +320,7 @@ async function main() {
     console.log(`Updated salary for ${salaryUpdated} existing jobs from API data`);
   }
 
-  console.log(`Already in DB: ${filtered.length - newJobs.length}`);
+  console.log(`Already in DB: ${senior.length - newJobs.length}`);
   console.log(`New jobs to insert: ${newJobs.length}\n`);
 
   if (newJobs.length === 0) {
@@ -287,6 +341,7 @@ async function main() {
     salary_min: j.salary_min,
     salary_max: j.salary_max,
     description: j.description,
+    seniority_score: j.seniority_score,
     is_dismissed: false,
   }));
 

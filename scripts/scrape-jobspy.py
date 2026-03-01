@@ -148,6 +148,61 @@ def match_watchlist(result_company: str, watchlist_names: list[str]) -> str | No
     return None
 
 
+ENTRY_LEVEL_TITLE_SIGNALS = [
+    "entry level", "entry-level", "junior", "associate", "intern", "internship",
+    "new grad", "graduate", "coordinator", "assistant", "analyst",
+    "specialist", "development representative",
+]
+
+ENTRY_LEVEL_EXP_PATTERNS = [
+    re.compile(r'\b0[-–]2\s*years', re.IGNORECASE),
+    re.compile(r'\b1[-–]2\s*years', re.IGNORECASE),
+    re.compile(r'\b0[-–]3\s*years', re.IGNORECASE),
+    re.compile(r'\b1[-–]3\s*years', re.IGNORECASE),
+    re.compile(r'\b2[-–]4\s*years', re.IGNORECASE),
+]
+
+
+def compute_seniority_score(title: str, description: str | None) -> int:
+    t = title.lower()
+    d = (description or "").lower()
+
+    for signal in ENTRY_LEVEL_TITLE_SIGNALS:
+        if signal in t:
+            return 0
+    if re.search(r'\b(bdr|sdr)\b', t, re.IGNORECASE):
+        return 0
+
+    for pat in ENTRY_LEVEL_EXP_PATTERNS:
+        if pat.search(d):
+            return 0
+
+    score = 0
+    if re.search(r'\b(chief|cro|coo|cfo|ceo|cmo|cto|svp|senior vice president)\b', t, re.IGNORECASE) or \
+       re.search(r'\bhead of\b', t, re.IGNORECASE):
+        score = 5
+    elif re.search(r'\b(vp|vice president)\b', t, re.IGNORECASE):
+        score = 4
+    elif re.search(r'\bdirector\b', t, re.IGNORECASE):
+        score = 3
+    elif re.search(r'\b(senior|lead|manager)\b', t, re.IGNORECASE):
+        score = 2
+    elif re.search(r'\b(enterprise|strategic)\b', t, re.IGNORECASE):
+        score = 1
+    else:
+        has_exp = bool(re.search(r'\b[5-9]\+?\s*years', d, re.IGNORECASE)) or \
+                  bool(re.search(r'\b(?:10|12|15)\+?\s*years', d, re.IGNORECASE))
+        score = 1 if has_exp else 0
+
+    if 0 < score < 5:
+        if re.search(r'\b(?:10|12|15)\+?\s*years', d, re.IGNORECASE):
+            score = min(5, score + 2)
+        elif re.search(r'\b[7-9]\+?\s*years', d, re.IGNORECASE):
+            score = min(5, score + 1)
+
+    return score
+
+
 def matches_keywords(title: str) -> bool:
     lower = title.lower()
     return any(kw.lower() in lower for kw in TITLE_KEYWORDS)
@@ -280,12 +335,18 @@ def main():
     ]
     print(f"After keyword filtering: {len(filtered)}")
 
-    if not filtered:
+    # Score seniority and remove score=0
+    for j in filtered:
+        j["seniority_score"] = compute_seniority_score(j["title"], j.get("description"))
+    senior = [j for j in filtered if j["seniority_score"] > 0]
+    print(f"After seniority filtering: {len(senior)} (removed {len(filtered) - len(senior)} entry-level/unclear)")
+
+    if not senior:
         print("No matching jobs found.")
         return 0
 
     # Deduplicate against existing jobs by URL
-    urls = [j["url"] for j in filtered]
+    urls = [j["url"] for j in senior]
     existing_urls = set()
     # Query in batches of 50 (Supabase URL param limit)
     for i in range(0, len(urls), 50):
@@ -303,12 +364,12 @@ def main():
     # Deduplicate within batch by URL
     seen_urls: set[str] = set()
     deduped: list[dict] = []
-    for j in filtered:
+    for j in senior:
         if j["url"] not in seen_urls and j["url"] not in existing_urls:
             seen_urls.add(j["url"])
             deduped.append(j)
     new_jobs = deduped
-    print(f"Already in DB: {len(filtered) - len(deduped)}")
+    print(f"Already in DB: {len(senior) - len(deduped)}")
     print(f"New jobs to insert: {len(new_jobs)}\n")
 
     if not new_jobs:
@@ -329,6 +390,7 @@ def main():
             "salary_min": j["salary_min"],
             "salary_max": j["salary_max"],
             "application_count": j["application_count"],
+            "seniority_score": j["seniority_score"],
             "is_dismissed": False,
         }
         for j in new_jobs

@@ -11,6 +11,8 @@ interface FilterBarProps {
   onDateRangeChange: (v: string) => void;
   minSalary: number;
   onMinSalaryChange: (v: number) => void;
+  minSeniority: number;
+  onMinSeniorityChange: (v: number) => void;
   remoteOnly: boolean;
   onRemoteOnlyChange: (v: boolean) => void;
   showDismissed: boolean;
@@ -30,6 +32,8 @@ export default function FilterBar({
   onDateRangeChange,
   minSalary,
   onMinSalaryChange,
+  minSeniority,
+  onMinSeniorityChange,
   remoteOnly,
   onRemoteOnlyChange,
   showDismissed,
@@ -96,6 +100,26 @@ export default function FilterBar({
           <span className="text-xs text-gray-500 w-12">
             {minSalary > 0 ? `$${minSalary}k` : "Any"}
           </span>
+        </div>
+        <div className="flex items-center gap-1 text-sm">
+          {[
+            { label: "All", value: 1 },
+            { label: "Senior+", value: 2 },
+            { label: "Director+", value: 3 },
+            { label: "VP+", value: 4 },
+          ].map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => onMinSeniorityChange(minSeniority === opt.value ? 1 : opt.value)}
+              className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                minSeniority === opt.value
+                  ? "bg-gray-900 text-white"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
         </div>
         <label className="flex items-center gap-1.5 text-sm text-gray-700 cursor-pointer">
           <input

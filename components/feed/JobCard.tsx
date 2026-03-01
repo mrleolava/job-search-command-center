@@ -1,7 +1,7 @@
 "use client";
 
 import { Job } from "@/lib/types";
-import { timeAgo, formatSalary, applicantColor } from "@/lib/utils";
+import { timeAgo, formatSalary, applicantColor, seniorityBadge } from "@/lib/utils";
 
 interface JobCardProps {
   job: Job;
@@ -12,6 +12,7 @@ interface JobCardProps {
 
 export default function JobCard({ job, onSave, onDismiss, isSaved }: JobCardProps) {
   const salary = formatSalary(job.salary_min, job.salary_max);
+  const badge = seniorityBadge(job.seniority_score);
 
   return (
     <div
@@ -58,6 +59,11 @@ export default function JobCard({ job, onSave, onDismiss, isSaved }: JobCardProp
             )}
           </div>
           <div className="flex flex-wrap gap-1.5 mt-2">
+            {badge && (
+              <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${badge.color}`}>
+                {badge.label}
+              </span>
+            )}
             {job.source && (
               <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
                 {job.source}

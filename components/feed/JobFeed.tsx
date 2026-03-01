@@ -17,6 +17,7 @@ export default function JobFeed() {
   const [source, setSource] = useState("");
   const [dateRange, setDateRange] = useState("");
   const [minSalary, setMinSalary] = useState(0);
+  const [minSeniority, setMinSeniority] = useState(1);
   const [remoteOnly, setRemoteOnly] = useState(false);
   const [showDismissed, setShowDismissed] = useState(false);
 
@@ -27,7 +28,7 @@ export default function JobFeed() {
   async function fetchData() {
     const supabase = createClient();
     const [jobsRes, appsRes] = await Promise.all([
-      supabase.from("jobs").select("*").order("date_posted", { ascending: false }),
+      supabase.from("jobs").select("*").gt("seniority_score", 0).order("seniority_score", { ascending: false }).order("salary_max", { ascending: false, nullsFirst: false }),
       supabase.from("applications").select("job_id"),
     ]);
     if (jobsRes.data) setJobs(jobsRes.data as Job[]);
@@ -49,10 +50,13 @@ export default function JobFeed() {
     [jobs]
   );
 
-  // Client-side filtering
+  // Client-side filtering and sorting
   const filteredJobs = useMemo(() => {
-    return jobs.filter((job) => {
+    const result = jobs.filter((job) => {
       if (!showDismissed && job.is_dismissed) return false;
+
+      // Hide score=0 always; filter by min seniority
+      if ((job.seniority_score ?? 0) < minSeniority) return false;
 
       if (search) {
         const q = search.toLowerCase();
@@ -80,7 +84,18 @@ export default function JobFeed() {
 
       return true;
     });
-  }, [jobs, search, location, source, dateRange, minSalary, remoteOnly, showDismissed]);
+
+    // Sort: seniority desc, then salary_max desc (nulls last)
+    result.sort((a, b) => {
+      const senDiff = (b.seniority_score ?? 0) - (a.seniority_score ?? 0);
+      if (senDiff !== 0) return senDiff;
+      const salA = a.salary_max ?? a.salary_min ?? 0;
+      const salB = b.salary_max ?? b.salary_min ?? 0;
+      return salB - salA;
+    });
+
+    return result;
+  }, [jobs, search, location, source, dateRange, minSalary, minSeniority, remoteOnly, showDismissed]);
 
   async function handleSave(job: Job) {
     const supabase = createClient();
@@ -127,6 +142,8 @@ export default function JobFeed() {
         onDateRangeChange={setDateRange}
         minSalary={minSalary}
         onMinSalaryChange={setMinSalary}
+        minSeniority={minSeniority}
+        onMinSeniorityChange={setMinSeniority}
         remoteOnly={remoteOnly}
         onRemoteOnlyChange={setRemoteOnly}
         showDismissed={showDismissed}

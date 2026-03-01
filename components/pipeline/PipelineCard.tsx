@@ -1,7 +1,7 @@
 "use client";
 
 import { Application, PipelineStage, PIPELINE_STAGES } from "@/lib/types";
-import { daysSince, capitalize, formatSalary } from "@/lib/utils";
+import { daysSince, capitalize, formatSalary, seniorityBadge } from "@/lib/utils";
 
 interface PipelineCardProps {
   application: Application;
@@ -18,7 +18,14 @@ export default function PipelineCard({ application, onStageChange, onClick }: Pi
       className="bg-white rounded-md border border-gray-200 p-3 cursor-pointer hover:shadow-sm transition-shadow"
       onClick={onClick}
     >
-      <div className="text-xs text-gray-500 font-medium">{job?.company ?? "Unknown"}</div>
+      <div className="flex items-center gap-1.5">
+        <span className="text-xs text-gray-500 font-medium">{job?.company ?? "Unknown"}</span>
+        {job?.seniority_score != null && seniorityBadge(job.seniority_score) && (
+          <span className={`inline-flex items-center px-1.5 py-0 rounded text-[10px] font-medium ${seniorityBadge(job.seniority_score)!.color}`}>
+            {seniorityBadge(job.seniority_score)!.label}
+          </span>
+        )}
+      </div>
       <div className="text-sm font-medium text-gray-900 mt-0.5 line-clamp-2">
         {job?.title ?? "Untitled"}
       </div>
