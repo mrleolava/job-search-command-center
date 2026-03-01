@@ -19,38 +19,51 @@ interface RawJob {
 
 // ---------- Salary parsing ----------
 
+function toAnnual(val: number): number {
+  // Normalize: if value looks like shorthand (e.g. 120 for $120k), multiply
+  if (val > 0 && val < 1000) return val * 1000;
+  return val;
+}
+
 function parseSalary(text: string | null): { min: number | null; max: number | null } {
   if (!text) return { min: null, max: null };
 
-  // Match patterns like $120,000 - $160,000 or $120k-$160k or $120,000/yr
-  const patterns = [
-    // $120,000 - $160,000
-    /\$\s*([\d,]+)\s*(?:[-–—to]+)\s*\$\s*([\d,]+)/gi,
-    // $120k - $160k
-    /\$\s*(\d+)\s*k\s*(?:[-–—to]+)\s*\$\s*(\d+)\s*k/gi,
-    // $120,000/year or /yr (single value)
-    /\$\s*([\d,]+)\s*(?:\/\s*(?:year|yr|annually))/gi,
-    // $120k (single value near salary context)
-    /\$\s*(\d+)\s*k/gi,
-  ];
+  // Strip HTML tags for clean matching
+  const clean = text.replace(/<[^>]+>/g, " ").replace(/&[a-z]+;/g, " ");
 
-  for (const pattern of patterns) {
-    const match = pattern.exec(text);
-    if (match) {
-      if (match[2]) {
-        // Range match
-        let min = parseInt(match[1].replace(/,/g, ""), 10);
-        let max = parseInt(match[2].replace(/,/g, ""), 10);
-        // If values are small (like 120, 160), they're in k
-        if (min < 1000) min *= 1000;
-        if (max < 1000) max *= 1000;
-        if (min >= 20000 && max >= 20000) return { min, max };
-      } else {
-        // Single value
-        let val = parseInt(match[1].replace(/,/g, ""), 10);
-        if (val < 1000) val *= 1000;
-        if (val >= 20000) return { min: val, max: null };
-      }
+  // 1. "$120k - $160k" or "$120K-$160K"
+  let m = clean.match(/\$\s*(\d+)\s*[kK]\s*[-–—]+\s*\$\s*(\d+)\s*[kK]/);
+  if (m) return { min: +m[1] * 1000, max: +m[2] * 1000 };
+
+  // 2. "$120-160k" (shorthand range, single $)
+  m = clean.match(/\$\s*(\d+)\s*[-–—]+\s*(\d+)\s*[kK]/);
+  if (m) {
+    const v1 = +m[1], v2 = +m[2];
+    if (v1 < 1000 && v2 < 1000) return { min: v1 * 1000, max: v2 * 1000 };
+  }
+
+  // 3. "$120,000 - $160,000" or "$120,000 to $160,000" or "$172,300--$222,800"
+  m = clean.match(/\$\s*([\d,]+)\s*(?:[-–—]+|to)\s*\$\s*([\d,]+)/i);
+  if (m) {
+    const v1 = parseInt(m[1].replace(/,/g, ""), 10);
+    const v2 = parseInt(m[2].replace(/,/g, ""), 10);
+    if (v1 >= 20000 && v2 >= 20000) return { min: v1, max: v2 };
+  }
+
+  // 4. "$150,000 base" or "$150,000/yr" or "$120,000 per year" (single value with context)
+  m = clean.match(/\$\s*([\d,]+)\s*(?:\/\s*(?:year|yr|annually)|per\s+(?:year|annum)|base|annually)/i);
+  if (m) {
+    const v = parseInt(m[1].replace(/,/g, ""), 10);
+    if (v >= 20000) return { min: v, max: null };
+  }
+
+  // 5. Standalone "$120k" or "$120K" near salary context words
+  const salaryContext = /(?:salary|compensation|pay|earning|ote|base|annual|total\s+comp)/i;
+  if (salaryContext.test(clean)) {
+    m = clean.match(/\$\s*(\d+)\s*[kK]/);
+    if (m) {
+      const v = +m[1] * 1000;
+      if (v >= 20000) return { min: v, max: null };
     }
   }
 
@@ -101,20 +114,11 @@ async function fetchAshbyJobs(
     if (!res.ok) return [];
     const data = await res.json();
     return (data.jobs ?? []).map((j: any) => {
-      const desc = j.descriptionPlain ?? j.description ?? "";
-      // Ashby provides compensation info in the job object
-      let salaryMin: number | null = null;
-      let salaryMax: number | null = null;
-      if (j.compensationTierSummary) {
-        const comp = parseSalary(j.compensationTierSummary);
-        salaryMin = comp.min;
-        salaryMax = comp.max;
-      }
-      if (!salaryMin && !salaryMax) {
-        const comp = parseSalary(desc);
-        salaryMin = comp.min;
-        salaryMax = comp.max;
-      }
+      // Ashby: salary is only in the description text
+      const desc = j.descriptionPlain ?? "";
+      const descHtml = j.descriptionHtml ?? "";
+      // Try plain text first, fall back to HTML
+      const salary = parseSalary(desc) ?? parseSalary(descHtml);
       return {
         company: companyName,
         title: j.title ?? "",
@@ -125,8 +129,8 @@ async function fetchAshbyJobs(
         is_remote:
           (j.location ?? "").toLowerCase().includes("remote") ||
           j.isRemote === true,
-        salary_min: salaryMin,
-        salary_max: salaryMax,
+        salary_min: salary.min,
+        salary_max: salary.max,
         description: desc || null,
       };
     });
@@ -228,6 +232,7 @@ async function main() {
 
   if (filtered.length === 0) {
     console.log("No matching jobs found.");
+    await backfillSalaries();
     return;
   }
 
@@ -240,11 +245,33 @@ async function main() {
   const existingUrls = new Set((existing ?? []).map((r: any) => r.url));
   const newJobs = filtered.filter((j) => !existingUrls.has(j.url));
 
+  // Update salary/description for existing jobs that now have salary data from API
+  const existingWithSalary = filtered.filter(
+    (j) => existingUrls.has(j.url) && (j.salary_min || j.salary_max)
+  );
+  if (existingWithSalary.length > 0) {
+    let salaryUpdated = 0;
+    for (const j of existingWithSalary) {
+      const update: Record<string, any> = {};
+      if (j.salary_min) update.salary_min = j.salary_min;
+      if (j.salary_max) update.salary_max = j.salary_max;
+      if (j.description) update.description = j.description;
+      const { error: upErr } = await supabase
+        .from("jobs")
+        .update(update)
+        .eq("url", j.url)
+        .is("salary_min", null);
+      if (!upErr) salaryUpdated++;
+    }
+    console.log(`Updated salary for ${salaryUpdated} existing jobs from API data`);
+  }
+
   console.log(`Already in DB: ${filtered.length - newJobs.length}`);
   console.log(`New jobs to insert: ${newJobs.length}\n`);
 
   if (newJobs.length === 0) {
     console.log("No new jobs to insert.");
+    await backfillSalaries();
     return;
   }
 
@@ -288,6 +315,41 @@ async function main() {
   )) {
     console.log(`  ${company}: ${count}`);
   }
+
+  // 8. Backfill: update existing jobs that have descriptions but no salary
+  await backfillSalaries();
+}
+
+async function backfillSalaries() {
+  console.log("\n=== Backfilling salaries for existing jobs ===");
+
+  const { data: jobs, error } = await supabase
+    .from("jobs")
+    .select("id, description, salary_min, salary_max")
+    .is("salary_min", null)
+    .is("salary_max", null)
+    .not("description", "is", null);
+
+  if (error || !jobs) {
+    console.error("Failed to load jobs for backfill:", error?.message);
+    return;
+  }
+
+  console.log(`Found ${jobs.length} jobs with descriptions but no salary`);
+
+  let updated = 0;
+  for (const job of jobs) {
+    const salary = parseSalary(job.description);
+    if (salary.min || salary.max) {
+      const { error: upErr } = await supabase
+        .from("jobs")
+        .update({ salary_min: salary.min, salary_max: salary.max })
+        .eq("id", job.id);
+      if (!upErr) updated++;
+    }
+  }
+
+  console.log(`Updated salary data for ${updated} existing jobs`);
 }
 
 main().catch(console.error);

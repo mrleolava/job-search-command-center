@@ -65,38 +65,47 @@ def parse_salary(text: str | None) -> tuple[int | None, int | None]:
     if not text:
         return None, None
 
-    patterns = [
-        # $120,000 - $160,000
-        r'\$\s*([\d,]+)\s*[-–—to]+\s*\$\s*([\d,]+)',
-        # $120k - $160k
-        r'\$\s*(\d+)\s*k\s*[-–—to]+\s*\$\s*(\d+)\s*k',
-    ]
-    for pattern in patterns:
-        m = re.search(pattern, text, re.IGNORECASE)
+    # Strip HTML tags
+    clean = re.sub(r'<[^>]+>', ' ', text)
+    clean = re.sub(r'&[a-z]+;', ' ', clean)
+
+    # 1. $120k - $160k or $120K-$160K
+    m = re.search(r'\$\s*(\d+)\s*[kK]\s*[-–—]+\s*\$\s*(\d+)\s*[kK]', clean)
+    if m:
+        return int(m.group(1)) * 1000, int(m.group(2)) * 1000
+
+    # 2. $120-160k (shorthand range, single $)
+    m = re.search(r'\$\s*(\d+)\s*[-–—]+\s*(\d+)\s*[kK]', clean)
+    if m:
+        v1, v2 = int(m.group(1)), int(m.group(2))
+        if v1 < 1000 and v2 < 1000:
+            return v1 * 1000, v2 * 1000
+
+    # 3. $120,000 - $160,000 or $120,000 to $160,000 or $172,300--$222,800
+    m = re.search(r'\$\s*([\d,]+)\s*(?:[-–—]+|to)\s*\$\s*([\d,]+)', clean, re.IGNORECASE)
+    if m:
+        v1 = int(m.group(1).replace(",", ""))
+        v2 = int(m.group(2).replace(",", ""))
+        if v1 >= 20000 and v2 >= 20000:
+            return v1, v2
+
+    # 4. $150,000 base or $120,000/yr or $120,000 per year
+    m = re.search(
+        r'\$\s*([\d,]+)\s*(?:/\s*(?:year|yr|annually)|per\s+(?:year|annum)|base|annually)',
+        clean, re.IGNORECASE
+    )
+    if m:
+        v = int(m.group(1).replace(",", ""))
+        if v >= 20000:
+            return v, None
+
+    # 5. Standalone $120k near salary context words
+    if re.search(r'(?:salary|compensation|pay|earning|ote|base|annual|total\s+comp)', clean, re.IGNORECASE):
+        m = re.search(r'\$\s*(\d+)\s*[kK]', clean)
         if m:
-            v1 = int(m.group(1).replace(",", ""))
-            v2 = int(m.group(2).replace(",", ""))
-            if v1 < 1000:
-                v1 *= 1000
-            if v2 < 1000:
-                v2 *= 1000
-            if v1 >= 20000 and v2 >= 20000:
-                return v1, v2
-
-    # Single value: $120,000/year or $120k
-    single = re.search(r'\$\s*([\d,]+)\s*(?:/\s*(?:year|yr|annually))', text, re.IGNORECASE)
-    if single:
-        v = int(single.group(1).replace(",", ""))
-        if v < 1000:
-            v *= 1000
-        if v >= 20000:
-            return v, None
-
-    single_k = re.search(r'\$\s*(\d+)\s*k', text, re.IGNORECASE)
-    if single_k:
-        v = int(single_k.group(1)) * 1000
-        if v >= 20000:
-            return v, None
+            v = int(m.group(1)) * 1000
+            if v >= 20000:
+                return v, None
 
     return None, None
 
@@ -207,10 +216,18 @@ def main():
                     if s not in ("nan", "None", ""):
                         description = s
 
-                # Extract salary — JobSpy provides min/max_amount or interval
+                # Extract salary — JobSpy provides min/max_amount + interval
                 salary_min = safe_int(row.get("min_amount"))
                 salary_max = safe_int(row.get("max_amount"))
-                # If JobSpy didn't provide salary, try parsing description
+                interval = str(row.get("interval", "")).lower()
+                # Convert hourly to annual (assuming 2080 hours/year)
+                if interval == "hourly":
+                    if salary_min: salary_min = salary_min * 2080
+                    if salary_max: salary_max = salary_max * 2080
+                # Filter out sub-annual values that are clearly not salaries
+                if salary_min and salary_min < 20000: salary_min = None
+                if salary_max and salary_max < 20000: salary_max = None
+                # Fall back to parsing description
                 if salary_min is None and salary_max is None and description:
                     salary_min, salary_max = parse_salary(description)
 
