@@ -114,6 +114,31 @@ def safe_int(val) -> int | None:
         return None
 
 
+COMPANY_SUFFIXES = re.compile(
+    r'\s*[,.]?\s*\b(inc\.?|llc\.?|ltd\.?|corp\.?|corporation|co\.?|company|technologies|technology|ai)\s*$',
+    re.IGNORECASE,
+)
+
+
+def normalize_company(name: str) -> str:
+    """Strip suffixes and lowercase for comparison."""
+    return COMPANY_SUFFIXES.sub("", name).strip().lower()
+
+
+def match_watchlist(result_company: str, watchlist_names: list[str]) -> str | None:
+    """Return the watchlist name if result_company fuzzy-matches, else None."""
+    norm_result = normalize_company(result_company)
+    if not norm_result:
+        return None
+    for wl_name in watchlist_names:
+        norm_wl = normalize_company(wl_name)
+        if norm_result == norm_wl:
+            return wl_name
+        if norm_result in norm_wl or norm_wl in norm_result:
+            return wl_name
+    return None
+
+
 def matches_keywords(title: str) -> bool:
     lower = title.lower()
     return any(kw.lower() in lower for kw in TITLE_KEYWORDS)
@@ -215,9 +240,25 @@ def main():
 
     print(f"\nTotal raw JobSpy results: {len(all_jobs)}")
 
+    # Filter to watchlist companies only
+    watchlist_matched = []
+    watchlist_rejected = set()
+    for j in all_jobs:
+        wl_name = match_watchlist(j["company"], company_names)
+        if wl_name:
+            j["company"] = wl_name  # normalize to watchlist name
+            watchlist_matched.append(j)
+        else:
+            watchlist_rejected.add(j["company"])
+    if watchlist_rejected:
+        print(f"Rejected {len(all_jobs) - len(watchlist_matched)} jobs from non-watchlist companies:")
+        for name in sorted(watchlist_rejected):
+            print(f"  - {name}")
+    print(f"After watchlist filter: {len(watchlist_matched)}")
+
     # Filter by keywords
     filtered = [
-        j for j in all_jobs
+        j for j in watchlist_matched
         if matches_keywords(j["title"]) and not matches_excludes(j["title"])
     ]
     print(f"After keyword filtering: {len(filtered)}")
