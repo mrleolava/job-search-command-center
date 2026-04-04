@@ -1,5 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { execFile } from "child_process";
+import { promisify } from "util";
+import path from "path";
 import {
   fetchGreenhouseJobs,
   fetchLeverJobs,
@@ -12,10 +15,54 @@ import {
 } from "@/lib/scraping";
 import { computeSeniorityScore } from "@/lib/utils";
 
+const execFileAsync = promisify(execFile);
+
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
+
+// Path to Python venv — falls back to system python3
+const PYTHON_BIN = process.env.JOBSPY_PYTHON ?? path.join(process.cwd(), ".venv", "bin", "python3.12");
+const JOBSPY_SCRIPT = path.join(process.cwd(), "scripts", "jobspy_search.py");
+
+async function fetchJobSpyJobs(
+  titleKeywords: string[],
+  descriptionKeywords: string[],
+  excludeKeywords: string[],
+  locations: string[],
+  includeRemote: boolean
+): Promise<RawJob[]> {
+  const keywords = [...titleKeywords, ...descriptionKeywords].filter(Boolean);
+  if (keywords.length === 0) return [];
+
+  const args = [
+    JOBSPY_SCRIPT,
+    "--keywords", keywords.join(","),
+    "--results", "100",
+  ];
+  if (locations.length > 0) {
+    args.push("--locations", locations.join(","));
+  }
+  if (includeRemote) {
+    args.push("--include-remote");
+  }
+  if (excludeKeywords.length > 0) {
+    args.push("--exclude", excludeKeywords.join(","));
+  }
+
+  const { stdout, stderr } = await execFileAsync(PYTHON_BIN, args, {
+    timeout: 120000,
+    maxBuffer: 10 * 1024 * 1024,
+  });
+
+  if (stderr) {
+    console.error("[jobspy] stderr:", stderr);
+  }
+
+  const jobs: RawJob[] = JSON.parse(stdout);
+  return jobs;
+}
 
 export async function POST(request: Request) {
   try {
@@ -24,25 +71,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "profileId required" }, { status: 400 });
     }
 
-    // 1. Load companies for this profile (optionally filtered)
-    let companiesQuery = supabase
-      .from("watchlist_companies")
-      .select("*")
-      .eq("profile_id", profileId);
-
-    if (companyId) {
-      companiesQuery = companiesQuery.eq("id", companyId);
-    } else if (companyIds?.length) {
-      companiesQuery = companiesQuery.in("id", companyIds);
-    }
-
-    const { data: companies, error: compErr } = await companiesQuery;
-
-    if (compErr) {
-      return NextResponse.json({ error: compErr.message }, { status: 500 });
-    }
-
-    // 2. Load search config
+    // 1. Load search config
     const { data: configs, error: cfgErr } = await supabase
       .from("search_configs")
       .select("*")
@@ -57,6 +86,7 @@ export async function POST(request: Request) {
     }
 
     const config = configs[0];
+    const companySearchEnabled: boolean = config.company_search_enabled ?? true;
     const titleKeywords: string[] = config.title_keywords ?? [];
     const excludeKeywords: string[] = config.exclude_keywords ?? [];
     const locations: string[] = config.locations ?? [];
@@ -67,47 +97,87 @@ export async function POST(request: Request) {
     const descriptionMatchMode = config.description_match_mode ?? "OR";
     const crossMatchMode = config.cross_match_mode ?? "AND";
 
-    // 3. Fetch jobs from all companies
-    const allRaw: RawJob[] = [];
+    let allRaw: RawJob[] = [];
 
-    for (const co of companies ?? []) {
-      const name = co.name ?? "Unknown";
-      let jobs: RawJob[] = [];
+    if (companySearchEnabled) {
+      // ---- COMPANY MODE: Scrape watchlist companies via APIs ----
 
-      if (co.greenhouse_slug) {
-        jobs = await fetchGreenhouseJobs(name, co.greenhouse_slug);
-      } else if (co.lever_slug) {
-        jobs = await fetchLeverJobs(name, co.lever_slug);
-      } else if (co.ashby_slug) {
-        jobs = await fetchAshbyJobs(name, co.ashby_slug);
-      } else {
-        continue;
+      // Load companies for this profile (optionally filtered)
+      let companiesQuery = supabase
+        .from("watchlist_companies")
+        .select("*")
+        .eq("profile_id", profileId);
+
+      if (companyId) {
+        companiesQuery = companiesQuery.eq("id", companyId);
+      } else if (companyIds?.length) {
+        companiesQuery = companiesQuery.in("id", companyIds);
       }
 
-      allRaw.push(...jobs);
+      const { data: companies, error: compErr } = await companiesQuery;
+
+      if (compErr) {
+        return NextResponse.json({ error: compErr.message }, { status: 500 });
+      }
+
+      for (const co of companies ?? []) {
+        const name = co.name ?? "Unknown";
+        let jobs: RawJob[] = [];
+
+        if (co.greenhouse_slug) {
+          jobs = await fetchGreenhouseJobs(name, co.greenhouse_slug);
+        } else if (co.lever_slug) {
+          jobs = await fetchLeverJobs(name, co.lever_slug);
+        } else if (co.ashby_slug) {
+          jobs = await fetchAshbyJobs(name, co.ashby_slug);
+        } else {
+          continue;
+        }
+
+        allRaw.push(...jobs);
+      }
+    } else {
+      // ---- KEYWORD MODE: Use JobSpy to search across all companies ----
+      try {
+        allRaw = await fetchJobSpyJobs(
+          titleKeywords,
+          descriptionKeywords,
+          excludeKeywords,
+          locations,
+          includeRemote
+        );
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "JobSpy error";
+        console.error("[jobspy] Failed:", msg);
+        return NextResponse.json(
+          { error: `JobSpy search failed: ${msg}. Make sure python-jobspy is installed in .venv/` },
+          { status: 500 }
+        );
+      }
     }
 
-    // 4. Filter with boolean logic
-    const filtered = allRaw.filter((job) => {
-      // Exclude keywords always block
-      if (matchesExcludes(job.title, excludeKeywords)) return false;
-      if (!matchesLocation(job.location, job.is_remote, locations, includeRemote, includeHybrid)) return false;
+    // Filter with boolean logic (for company mode; JobSpy already handles keywords/excludes)
+    const filtered = companySearchEnabled
+      ? allRaw.filter((job) => {
+          if (matchesExcludes(job.title, excludeKeywords)) return false;
+          if (!matchesLocation(job.location, job.is_remote, locations, includeRemote, includeHybrid)) return false;
 
-      const hasTitleKw = titleKeywords.length > 0;
-      const hasDescKw = descriptionKeywords.length > 0;
+          const hasTitleKw = titleKeywords.length > 0;
+          const hasDescKw = descriptionKeywords.length > 0;
 
-      if (!hasTitleKw && !hasDescKw) return true;
+          if (!hasTitleKw && !hasDescKw) return true;
 
-      const titleMatch = !hasTitleKw || matchesKeywords(job.title, titleKeywords, titleMatchMode);
-      const descMatch = !hasDescKw || matchesKeywords(job.description ?? "", descriptionKeywords, descriptionMatchMode);
+          const titleMatch = !hasTitleKw || matchesKeywords(job.title, titleKeywords, titleMatchMode);
+          const descMatch = !hasDescKw || matchesKeywords(job.description ?? "", descriptionKeywords, descriptionMatchMode);
 
-      if (crossMatchMode === "AND") {
-        return titleMatch && descMatch;
-      }
-      return titleMatch || descMatch;
-    });
+          if (crossMatchMode === "AND") {
+            return titleMatch && descMatch;
+          }
+          return titleMatch || descMatch;
+        })
+      : allRaw; // JobSpy results are already keyword-filtered
 
-    // 5. Score seniority and remove entry-level
+    // Score seniority and remove entry-level
     const scored = filtered.map((j) => ({
       ...j,
       seniority_score: computeSeniorityScore(j.title, j.description),
@@ -116,6 +186,7 @@ export async function POST(request: Request) {
 
     if (senior.length === 0) {
       return NextResponse.json({
+        mode: companySearchEnabled ? "company" : "keyword",
         fetched: allRaw.length,
         filtered: filtered.length,
         afterSeniority: 0,
@@ -123,7 +194,7 @@ export async function POST(request: Request) {
       });
     }
 
-    // 6. Deduplicate against DB
+    // Deduplicate against DB
     const urls = senior.map((j) => j.url);
     const { data: existing } = await supabase
       .from("jobs")
@@ -150,7 +221,7 @@ export async function POST(request: Request) {
       if (!error) salaryUpdated++;
     }
 
-    // 7. Insert new jobs
+    // Insert new jobs
     let inserted = 0;
     if (newJobs.length > 0) {
       const rows = newJobs.map((j) => ({
@@ -175,7 +246,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // 8. Backfill salaries
+    // Backfill salaries
     const { data: backfillJobs } = await supabase
       .from("jobs")
       .select("id, description")
@@ -196,6 +267,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({
+      mode: companySearchEnabled ? "company" : "keyword",
       fetched: allRaw.length,
       filtered: filtered.length,
       afterSeniority: senior.length,

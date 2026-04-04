@@ -8,7 +8,7 @@ interface ScrapeButtonProps {
 
 export default function ScrapeButton({ profileId }: ScrapeButtonProps) {
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<Record<string, number> | null>(null);
+  const [result, setResult] = useState<Record<string, number | string> | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function handleScrape() {
@@ -71,13 +71,20 @@ export default function ScrapeButton({ profileId }: ScrapeButtonProps) {
 
       {result && (
         <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-md text-sm text-green-800">
-          <p className="font-medium mb-1">Scrape complete</p>
+          <p className="font-medium mb-1">
+            Scrape complete
+            {result.mode && (
+              <span className="font-normal text-xs ml-2 text-green-600">
+                ({result.mode === "company" ? "Company APIs" : "JobSpy keyword search"})
+              </span>
+            )}
+          </p>
           <ul className="space-y-0.5 text-xs">
-            <li>Fetched: {result.fetched} jobs from APIs</li>
+            <li>Fetched: {result.fetched} jobs</li>
             <li>After filters: {result.filtered}</li>
             <li>After seniority: {result.afterSeniority}</li>
             <li>New jobs inserted: {result.inserted}</li>
-            {result.salaryUpdated > 0 && (
+            {(result.salaryUpdated as number) > 0 && (
               <li>Salary backfilled: {result.salaryUpdated}</li>
             )}
           </ul>

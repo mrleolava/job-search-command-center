@@ -101,4 +101,5 @@ export interface SearchConfig {
   cross_match_mode: MatchMode;
   include_remote: boolean;
   include_hybrid: boolean;
+  company_search_enabled: boolean;
 }

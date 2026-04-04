@@ -103,6 +103,8 @@ export default function JobFeed() {
     setSearchConfig(cfgRes.data?.[0] ?? null);
   }
 
+  const companySearchEnabled = searchConfig?.company_search_enabled ?? true;
+
   const watchlistNames = useMemo(
     () => new Set(watchlistCompanies.map((c) => c.name.toLowerCase())),
     [watchlistCompanies]
@@ -120,7 +122,7 @@ export default function JobFeed() {
   const descriptionMatchMode = searchConfig?.description_match_mode ?? "OR";
   const crossMatchMode = searchConfig?.cross_match_mode ?? "AND";
 
-  // Derive unique values for filter dropdowns (from watchlist-filtered jobs)
+  // Derive unique values for filter dropdowns
   const allLocations = useMemo(
     () => Array.from(new Set(jobs.map((j) => j.location).filter(Boolean) as string[])).sort(),
     [jobs]
@@ -132,52 +134,66 @@ export default function JobFeed() {
 
   const hasWatchlist = watchlistCompanies.length > 0;
 
-  // Total count (before user filters, but after watchlist + keyword config)
-  const watchlistFilteredJobs = useMemo(() => {
-    if (!hasWatchlist) return [];
-    return jobs.filter((job) => {
-      if (!job.company || !watchlistNames.has(job.company.toLowerCase())) return false;
+  // Config-level filtering — differs based on search mode
+  const configFilteredJobs = useMemo(() => {
+    if (companySearchEnabled) {
+      // Company mode: filter to watchlist companies + keyword matching
+      if (!hasWatchlist) return [];
+      return jobs.filter((job) => {
+        if (!job.company || !watchlistNames.has(job.company.toLowerCase())) return false;
 
-      // Exclude keywords
-      if (job.title) {
-        const excludes = searchConfig?.exclude_keywords ?? [];
-        const titleLower = job.title.toLowerCase();
-        if (excludes.some((kw) => titleLower.includes(kw.toLowerCase()))) return false;
-      }
-
-      // Config keyword matching
-      const hasTitleKw = titleKeywords.length > 0;
-      const hasDescKw = descriptionKeywords.length > 0;
-      if (hasTitleKw || hasDescKw) {
-        const titleMatch = !hasTitleKw || (() => {
-          if (!job.title) return false;
-          const lower = job.title.toLowerCase();
-          return titleMatchMode === "AND"
-            ? titleKeywords.every((kw) => lower.includes(kw))
-            : titleKeywords.some((kw) => lower.includes(kw));
-        })();
-        const descMatch = !hasDescKw || (() => {
-          if (!job.description) return false;
-          const lower = job.description.toLowerCase();
-          return descriptionMatchMode === "AND"
-            ? descriptionKeywords.every((kw) => lower.includes(kw))
-            : descriptionKeywords.some((kw) => lower.includes(kw));
-        })();
-        if (crossMatchMode === "AND") {
-          if (!titleMatch || !descMatch) return false;
-        } else {
-          if (!titleMatch && !descMatch) return false;
+        // Exclude keywords
+        if (job.title) {
+          const excludes = searchConfig?.exclude_keywords ?? [];
+          const titleLower = job.title.toLowerCase();
+          if (excludes.some((kw) => titleLower.includes(kw.toLowerCase()))) return false;
         }
-      }
 
-      return true;
-    });
-  }, [jobs, hasWatchlist, watchlistNames, titleKeywords, descriptionKeywords, titleMatchMode, descriptionMatchMode, crossMatchMode, searchConfig]);
+        // Config keyword matching
+        const hasTitleKw = titleKeywords.length > 0;
+        const hasDescKw = descriptionKeywords.length > 0;
+        if (hasTitleKw || hasDescKw) {
+          const titleMatch = !hasTitleKw || (() => {
+            if (!job.title) return false;
+            const lower = job.title.toLowerCase();
+            return titleMatchMode === "AND"
+              ? titleKeywords.every((kw) => lower.includes(kw))
+              : titleKeywords.some((kw) => lower.includes(kw));
+          })();
+          const descMatch = !hasDescKw || (() => {
+            if (!job.description) return false;
+            const lower = job.description.toLowerCase();
+            return descriptionMatchMode === "AND"
+              ? descriptionKeywords.every((kw) => lower.includes(kw))
+              : descriptionKeywords.some((kw) => lower.includes(kw));
+          })();
+          if (crossMatchMode === "AND") {
+            if (!titleMatch || !descMatch) return false;
+          } else {
+            if (!titleMatch && !descMatch) return false;
+          }
+        }
+
+        return true;
+      });
+    } else {
+      // Keyword mode: show all jobs (they were already filtered by JobSpy during scraping)
+      // Still apply exclude keywords client-side for safety
+      const excludes = (searchConfig?.exclude_keywords ?? []).map((k) => k.toLowerCase());
+      return jobs.filter((job) => {
+        if (job.title && excludes.length > 0) {
+          const titleLower = job.title.toLowerCase();
+          if (excludes.some((kw) => titleLower.includes(kw))) return false;
+        }
+        return true;
+      });
+    }
+  }, [jobs, companySearchEnabled, hasWatchlist, watchlistNames, titleKeywords, descriptionKeywords, titleMatchMode, descriptionMatchMode, crossMatchMode, searchConfig]);
 
   // Apply user filters
   const filteredJobs = useMemo(() => {
     const f = filters;
-    const result = watchlistFilteredJobs.filter((job) => {
+    const result = configFilteredJobs.filter((job) => {
       if (!f.showDismissed && job.is_dismissed) return false;
       if ((job.seniority_score ?? 0) < f.minSeniority) return false;
 
@@ -253,7 +269,7 @@ export default function JobFeed() {
     });
 
     return result;
-  }, [watchlistFilteredJobs, filters]);
+  }, [configFilteredJobs, filters]);
 
   const jobMatchedKeywords = useMemo(() => {
     const map = new Map<string, { title: string[]; description: string[] }>();
@@ -301,7 +317,16 @@ export default function JobFeed() {
   return (
     <div className="max-w-5xl mx-auto py-6 px-6">
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-xl font-bold text-gray-900">Job Feed</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-xl font-bold text-gray-900">Job Feed</h1>
+          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+            companySearchEnabled
+              ? "bg-blue-100 text-blue-700"
+              : "bg-purple-100 text-purple-700"
+          }`}>
+            {companySearchEnabled ? "Company Search" : "Keyword Search"}
+          </span>
+        </div>
         <ProfileSwitcher
           profiles={profiles}
           activeProfileId={profileId}
@@ -314,7 +339,7 @@ export default function JobFeed() {
         onChange={updateFilters}
         allLocations={allLocations}
         allCompanies={allCompanies}
-        totalCount={watchlistFilteredJobs.length}
+        totalCount={configFilteredJobs.length}
         filteredCount={filteredJobs.length}
       />
 
@@ -350,7 +375,7 @@ export default function JobFeed() {
         </div>
       )}
 
-      {!hasWatchlist ? (
+      {companySearchEnabled && !hasWatchlist ? (
         <div className="text-center py-16">
           <p className="text-gray-500">No companies in your watchlist yet.</p>
           <p className="text-gray-400 text-sm mt-1">

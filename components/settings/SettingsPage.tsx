@@ -121,6 +121,45 @@ export default function SettingsPage() {
         />
       </div>
 
+      {/* Search Mode Toggle */}
+      {config && (
+        <section className="bg-white border border-gray-200 rounded-lg p-5 mb-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Search Mode</h2>
+              <p className="text-sm text-gray-500 mt-0.5">
+                {(config.company_search_enabled ?? true)
+                  ? "Scraping jobs from your watchlist companies via their career pages"
+                  : "Searching Indeed, LinkedIn & ZipRecruiter using your keywords"}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => updateConfigField("company_search_enabled", !(config.company_search_enabled ?? true))}
+              className={`relative inline-flex h-7 w-[52px] shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
+                (config.company_search_enabled ?? true) ? "bg-gray-900" : "bg-gray-300"
+              }`}
+            >
+              <span className="sr-only">Company Search</span>
+              <span
+                className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow ring-0 transition-transform ${
+                  (config.company_search_enabled ?? true) ? "translate-x-[25px]" : "translate-x-0"
+                }`}
+              />
+            </button>
+          </div>
+          <div className="mt-2 flex items-center gap-2">
+            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+              (config.company_search_enabled ?? true)
+                ? "bg-blue-100 text-blue-700"
+                : "bg-purple-100 text-purple-700"
+            }`}>
+              {(config.company_search_enabled ?? true) ? "Company Search" : "Keyword Search"}
+            </span>
+          </div>
+        </section>
+      )}
+
       {/* Search Config */}
       <section className="bg-white border border-gray-200 rounded-lg p-5 mb-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Search Configuration</h2>
@@ -257,15 +296,28 @@ export default function SettingsPage() {
         )}
       </section>
 
-      {/* Company Watchlist */}
-      <section className="bg-white border border-gray-200 rounded-lg p-5 mb-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Company Watchlist</h2>
-        <CompanyWatchlist
-          companies={companies}
-          profileId={profileId}
-          onUpdate={fetchData}
-        />
-      </section>
+      {/* Company Watchlist — only visible in company search mode */}
+      {(config?.company_search_enabled ?? true) ? (
+        <section className="bg-white border border-gray-200 rounded-lg p-5 mb-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Company Watchlist</h2>
+          <CompanyWatchlist
+            companies={companies}
+            profileId={profileId}
+            onUpdate={fetchData}
+          />
+        </section>
+      ) : (
+        <section className="bg-white border border-gray-200 rounded-lg p-5 mb-6">
+          <div className="text-center py-4">
+            <p className="text-sm text-gray-500">
+              Searching all companies using your keywords via Indeed, LinkedIn & ZipRecruiter.
+            </p>
+            <p className="text-xs text-gray-400 mt-1">
+              Switch to Company Search mode above to manage a watchlist of specific companies.
+            </p>
+          </div>
+        </section>
+      )}
 
       {/* Scraper */}
       <section className="bg-white border border-gray-200 rounded-lg p-5">
