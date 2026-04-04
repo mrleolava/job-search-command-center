@@ -3,13 +3,10 @@
 import { useState, useEffect, useMemo } from "react";
 import { createClient } from "@/lib/supabase";
 import { Application, PipelineStage, PIPELINE_STAGES } from "@/lib/types";
-import { useProfile } from "@/lib/useProfile";
-import ProfileSwitcher from "@/components/settings/ProfileSwitcher";
 import KanbanColumn from "./KanbanColumn";
 import ApplicationDetail from "./ApplicationDetail";
 
 export default function PipelineBoard() {
-  const { profiles, profileId, setProfileId, profileSlug, loading: profileLoading } = useProfile();
   const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedApp, setSelectedApp] = useState<Application | null>(null);
@@ -28,11 +25,6 @@ export default function PipelineBoard() {
     setLoading(false);
   }
 
-  const filteredApplications = useMemo(() => {
-    if (!profileSlug) return applications;
-    return applications.filter((app) => app.profile === profileSlug);
-  }, [applications, profileSlug]);
-
   const groupedByStage = useMemo(() => {
     const groups: Record<PipelineStage, Application[]> = {
       saved: [],
@@ -43,13 +35,13 @@ export default function PipelineBoard() {
       rejected: [],
       withdrawn: [],
     };
-    for (const app of filteredApplications) {
+    for (const app of applications) {
       if (groups[app.stage]) {
         groups[app.stage].push(app);
       }
     }
     return groups;
-  }, [filteredApplications]);
+  }, [applications]);
 
   async function handleStageChange(applicationId: string, newStage: PipelineStage) {
     // Optimistic update
@@ -73,7 +65,7 @@ export default function PipelineBoard() {
     setSelectedApp(updated);
   }
 
-  if (loading || profileLoading) {
+  if (loading) {
     return (
       <div className="max-w-7xl mx-auto py-8 px-6">
         <p className="text-gray-500 text-center py-16">Loading pipeline...</p>
@@ -85,16 +77,9 @@ export default function PipelineBoard() {
     <div className="max-w-7xl mx-auto py-6 px-6">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-bold text-gray-900">Pipeline</h1>
-        <div className="flex items-center gap-3">
-          <ProfileSwitcher
-            profiles={profiles}
-            activeProfileId={profileId}
-            onSwitch={setProfileId}
-          />
-          <span className="text-sm text-gray-500">
-            {filteredApplications.length} applications
-          </span>
-        </div>
+        <span className="text-sm text-gray-500">
+          {applications.length} applications
+        </span>
       </div>
 
       <div className="flex gap-4 overflow-x-auto pb-4">

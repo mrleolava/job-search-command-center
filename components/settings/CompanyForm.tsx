@@ -5,7 +5,6 @@ import { WatchlistCompany } from "@/lib/types";
 
 interface CompanyFormProps {
   company: WatchlistCompany;
-  profileId: string;
   onSave: (data: {
     name: string;
     greenhouse_slug: string | null;

@@ -3,9 +3,9 @@
 import { useState } from "react";
 import { WatchlistCompany } from "@/lib/types";
 import { createClient } from "@/lib/supabase";
+import { PROFILE_ID } from "@/lib/profile";
 
 interface BulkAddFormProps {
-  profileId: string;
   existingCompanies: WatchlistCompany[];
   onComplete: () => void;
   onCancel: () => void;
@@ -50,7 +50,6 @@ function normalizeUrl(url: string): string {
 }
 
 export default function BulkAddForm({
-  profileId,
   existingCompanies,
   onComplete,
   onCancel,
@@ -143,7 +142,7 @@ export default function BulkAddForm({
             greenhouse_slug: gh,
             lever_slug: lev,
             ashby_slug: ash,
-            profile_id: profileId,
+            profile_id: PROFILE_ID,
           })
           .select("id")
           .single();
@@ -177,7 +176,7 @@ export default function BulkAddForm({
         const res = await fetch("/api/scrape", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ profileId, companyIds: newCompanyIds }),
+          body: JSON.stringify({ companyIds: newCompanyIds }),
         });
         const data = await res.json();
         if (res.ok) {

@@ -2,11 +2,7 @@
 
 import { useState } from "react";
 
-interface ScrapeButtonProps {
-  profileId: string;
-}
-
-export default function ScrapeButton({ profileId }: ScrapeButtonProps) {
+export default function ScrapeButton() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<Record<string, number | string> | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -20,7 +16,7 @@ export default function ScrapeButton({ profileId }: ScrapeButtonProps) {
       const res = await fetch("/api/scrape", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ profileId }),
+        body: JSON.stringify({}),
       });
       const data = await res.json();
       if (!res.ok) {

@@ -4,8 +4,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 import { Job, WatchlistCompany, SearchConfig } from "@/lib/types";
-import { useProfile } from "@/lib/useProfile";
-import ProfileSwitcher from "@/components/settings/ProfileSwitcher";
+import { PROFILE_ID, PROFILE_SLUG } from "@/lib/profile";
 import FilterBar, { FilterState } from "./FilterBar";
 import JobList from "./JobList";
 import { getMatchedKeywords } from "@/lib/scraping";
@@ -44,7 +43,6 @@ function serializeFiltersToParams(f: FilterState): string {
 }
 
 export default function JobFeed() {
-  const { profiles, profileId, setProfileId, profileSlug, loading: profileLoading } = useProfile();
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -71,12 +69,8 @@ export default function JobFeed() {
 
   useEffect(() => {
     fetchJobs();
+    fetchProfileData();
   }, []);
-
-  useEffect(() => {
-    if (profileId) fetchProfileData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profileId]);
 
   async function fetchJobs() {
     const supabase = createClient();
@@ -96,8 +90,8 @@ export default function JobFeed() {
   async function fetchProfileData() {
     const supabase = createClient();
     const [compRes, cfgRes] = await Promise.all([
-      supabase.from("watchlist_companies").select("*").eq("profile_id", profileId).order("name"),
-      supabase.from("search_configs").select("*").eq("profile_id", profileId).limit(1),
+      supabase.from("watchlist_companies").select("*").eq("profile_id", PROFILE_ID).order("name"),
+      supabase.from("search_configs").select("*").eq("profile_id", PROFILE_ID).limit(1),
     ]);
     setWatchlistCompanies(compRes.data ?? []);
     setSearchConfig(cfgRes.data?.[0] ?? null);
@@ -134,22 +128,19 @@ export default function JobFeed() {
 
   const hasWatchlist = watchlistCompanies.length > 0;
 
-  // Config-level filtering — differs based on search mode
+  // Config-level filtering
   const configFilteredJobs = useMemo(() => {
     if (companySearchEnabled) {
-      // Company mode: filter to watchlist companies + keyword matching
       if (!hasWatchlist) return [];
       return jobs.filter((job) => {
         if (!job.company || !watchlistNames.has(job.company.toLowerCase())) return false;
 
-        // Exclude keywords
         if (job.title) {
           const excludes = searchConfig?.exclude_keywords ?? [];
           const titleLower = job.title.toLowerCase();
           if (excludes.some((kw) => titleLower.includes(kw.toLowerCase()))) return false;
         }
 
-        // Config keyword matching
         const hasTitleKw = titleKeywords.length > 0;
         const hasDescKw = descriptionKeywords.length > 0;
         if (hasTitleKw || hasDescKw) {
@@ -177,8 +168,6 @@ export default function JobFeed() {
         return true;
       });
     } else {
-      // Keyword mode: show all jobs (they were already filtered by JobSpy during scraping)
-      // Still apply exclude keywords client-side for safety
       const excludes = (searchConfig?.exclude_keywords ?? []).map((k) => k.toLowerCase());
       return jobs.filter((job) => {
         if (job.title && excludes.length > 0) {
@@ -206,17 +195,14 @@ export default function JobFeed() {
         if (!match) return false;
       }
 
-      // Location multi-select
       if (f.locations.length > 0) {
         if (!job.location || !f.locations.some((loc) => job.location === loc)) return false;
       }
 
-      // Company multi-select
       if (f.companies.length > 0) {
         if (!job.company || !f.companies.includes(job.company)) return false;
       }
 
-      // Salary
       if (f.minSalary > 0) {
         const salaryVal = job.salary_max ?? job.salary_min ?? 0;
         if (salaryVal < f.minSalary * 1000) return false;
@@ -241,7 +227,6 @@ export default function JobFeed() {
       return true;
     });
 
-    // Sort
     result.sort((a, b) => {
       switch (f.sortBy) {
         case "date": {
@@ -288,7 +273,7 @@ export default function JobFeed() {
     const supabase = createClient();
     const { error } = await supabase
       .from("applications")
-      .insert({ job_id: job.id, stage: "saved", profile: profileSlug });
+      .insert({ job_id: job.id, stage: "saved", profile: PROFILE_SLUG });
     if (!error) {
       setSavedJobIds((prev) => new Set(prev).add(job.id));
     }
@@ -303,7 +288,7 @@ export default function JobFeed() {
     await supabase.from("jobs").update({ is_dismissed: newDismissed }).eq("id", job.id);
   }
 
-  if (loading || profileLoading) {
+  if (loading) {
     return (
       <div className="max-w-5xl mx-auto py-8 px-6">
         <p className="text-gray-500 text-center py-16">Loading jobs...</p>
@@ -327,11 +312,6 @@ export default function JobFeed() {
             {companySearchEnabled ? "Company Search" : "Keyword Search"}
           </span>
         </div>
-        <ProfileSwitcher
-          profiles={profiles}
-          activeProfileId={profileId}
-          onSwitch={setProfileId}
-        />
       </div>
 
       <FilterBar

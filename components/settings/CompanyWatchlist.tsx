@@ -8,13 +8,11 @@ import BulkAddForm from "./BulkAddForm";
 
 interface CompanyWatchlistProps {
   companies: WatchlistCompany[];
-  profileId: string;
   onUpdate: () => void;
 }
 
 export default function CompanyWatchlist({
   companies,
-  profileId,
   onUpdate,
 }: CompanyWatchlistProps) {
   const [showAddForm, setShowAddForm] = useState(false);
@@ -99,7 +97,6 @@ export default function CompanyWatchlist({
       {showAddForm && (
         <div className="mb-4">
           <BulkAddForm
-            profileId={profileId}
             existingCompanies={companies}
             onComplete={handleAddComplete}
             onCancel={() => setShowAddForm(false)}
@@ -113,7 +110,6 @@ export default function CompanyWatchlist({
             <CompanyForm
               key={co.id}
               company={co}
-              profileId={profileId}
               onSave={(data) => handleEdit(co.id, data)}
               onComplete={handleEditComplete}
               onCancel={() => setEditingId(null)}

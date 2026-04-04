@@ -3,8 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase";
 import { WatchlistCompany, SearchConfig, MatchMode } from "@/lib/types";
-import { useProfile } from "@/lib/useProfile";
-import ProfileSwitcher from "./ProfileSwitcher";
+import { PROFILE_ID } from "@/lib/profile";
 import CompanyWatchlist from "./CompanyWatchlist";
 import TagEditor from "./TagEditor";
 import ScrapeButton from "./ScrapeButton";
@@ -54,24 +53,22 @@ function MatchModeToggle({
 
 export default function SettingsPage() {
   const supabase = createClient();
-  const { profiles, profileId, setProfileId, loading } = useProfile();
   const [companies, setCompanies] = useState<WatchlistCompany[]>([]);
   const [config, setConfig] = useState<SearchConfig | null>(null);
+  const [loading, setLoading] = useState(true);
   const [saveStatus, setSaveStatus] = useState<{ field: string; ok: boolean; msg: string } | null>(null);
 
   const fetchData = useCallback(async () => {
-    if (!profileId) return;
-
     const [compRes, cfgRes] = await Promise.all([
       supabase
         .from("watchlist_companies")
         .select("*")
-        .eq("profile_id", profileId)
+        .eq("profile_id", PROFILE_ID)
         .order("name"),
       supabase
         .from("search_configs")
         .select("*")
-        .eq("profile_id", profileId)
+        .eq("profile_id", PROFILE_ID)
         .limit(1),
     ]);
 
@@ -84,8 +81,9 @@ export default function SettingsPage() {
       cross_match_mode: loadedConfig.cross_match_mode,
     } : null);
     setConfig(loadedConfig);
+    setLoading(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profileId]);
+  }, []);
 
   useEffect(() => {
     fetchData();
@@ -98,7 +96,7 @@ export default function SettingsPage() {
     }
     console.log(`[settings] Updating ${field} =`, JSON.stringify(value), `| config.id =`, config.id);
 
-    // Optimistic update — immediately reflect in UI
+    // Optimistic update
     const prevConfig = config;
     setConfig({ ...config, [field]: value } as SearchConfig);
 
@@ -112,7 +110,6 @@ export default function SettingsPage() {
 
     if (error) {
       console.error(`[settings] Failed to update ${field}:`, error);
-      // Revert on failure
       setConfig(prevConfig);
       setSaveStatus({ field, ok: false, msg: `Failed: ${error.message}` });
     } else {
@@ -120,7 +117,6 @@ export default function SettingsPage() {
       setSaveStatus({ field, ok: true, msg: `Saved ${field} = ${JSON.stringify(value)}` });
     }
 
-    // Auto-clear status after 3s
     setTimeout(() => setSaveStatus(null), 3000);
   }
 
@@ -150,14 +146,7 @@ export default function SettingsPage() {
 
   return (
     <div className="max-w-3xl mx-auto py-8 px-6">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
-        <ProfileSwitcher
-          profiles={profiles}
-          activeProfileId={profileId}
-          onSwitch={setProfileId}
-        />
-      </div>
+      <h1 className="text-2xl font-bold text-gray-900 mb-6">Settings</h1>
 
       {/* Save status toast */}
       {saveStatus && (
@@ -343,7 +332,7 @@ export default function SettingsPage() {
             </div>
           </div>
         ) : (
-          <p className="text-sm text-gray-500">No search config found for this profile.</p>
+          <p className="text-sm text-gray-500">No search config found.</p>
         )}
       </section>
 
@@ -353,7 +342,6 @@ export default function SettingsPage() {
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Company Watchlist</h2>
           <CompanyWatchlist
             companies={companies}
-            profileId={profileId}
             onUpdate={fetchData}
           />
         </section>
@@ -373,7 +361,7 @@ export default function SettingsPage() {
       {/* Scraper */}
       <section className="bg-white border border-gray-200 rounded-lg p-5">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Job Scraper</h2>
-        <ScrapeButton profileId={profileId} />
+        <ScrapeButton />
       </section>
     </div>
   );

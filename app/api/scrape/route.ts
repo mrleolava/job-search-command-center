@@ -14,6 +14,7 @@ import {
   RawJob,
 } from "@/lib/scraping";
 import { computeSeniorityScore } from "@/lib/utils";
+import { PROFILE_ID } from "@/lib/profile";
 
 const execFileAsync = promisify(execFile);
 
@@ -66,16 +67,13 @@ async function fetchJobSpyJobs(
 
 export async function POST(request: Request) {
   try {
-    const { profileId, companyId, companyIds } = await request.json();
-    if (!profileId) {
-      return NextResponse.json({ error: "profileId required" }, { status: 400 });
-    }
+    const { companyId, companyIds } = await request.json();
 
     // 1. Load search config
     const { data: configs, error: cfgErr } = await supabase
       .from("search_configs")
       .select("*")
-      .eq("profile_id", profileId)
+      .eq("profile_id", PROFILE_ID)
       .limit(1);
 
     if (cfgErr || !configs?.length) {
@@ -106,7 +104,7 @@ export async function POST(request: Request) {
       let companiesQuery = supabase
         .from("watchlist_companies")
         .select("*")
-        .eq("profile_id", profileId);
+        .eq("profile_id", PROFILE_ID);
 
       if (companyId) {
         companiesQuery = companiesQuery.eq("id", companyId);
