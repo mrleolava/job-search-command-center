@@ -133,11 +133,21 @@ async function scrapeCareerPage(website: string): Promise<{
 export async function POST(request: NextRequest) {
   const { name, website } = await request.json();
 
-  if (!name) {
-    return NextResponse.json({ error: "name is required" }, { status: 400 });
+  if (!name && !website) {
+    return NextResponse.json({ error: "name or website is required" }, { status: 400 });
   }
 
-  const slugs = generateSlugs(name, website);
+  // Derive a name from website if not provided
+  const effectiveName = name || (() => {
+    const domain = (website as string)
+      .replace(/^https?:\/\//, "")
+      .replace(/^www\./, "")
+      .split("/")[0]
+      .split(".")[0];
+    return domain.charAt(0).toUpperCase() + domain.slice(1);
+  })();
+
+  const slugs = generateSlugs(effectiveName, website);
   const detected: { greenhouse: string | null; lever: string | null; ashby: string | null; workday: boolean } = {
     greenhouse: null,
     lever: null,

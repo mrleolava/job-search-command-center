@@ -4,6 +4,7 @@ import { useState } from "react";
 import { WatchlistCompany } from "@/lib/types";
 import { createClient } from "@/lib/supabase";
 import CompanyForm from "./CompanyForm";
+import BulkAddForm from "./BulkAddForm";
 
 interface CompanyWatchlistProps {
   companies: WatchlistCompany[];
@@ -20,29 +21,6 @@ export default function CompanyWatchlist({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const supabase = createClient();
-
-  async function handleAdd(data: {
-    name: string;
-    greenhouse_slug: string | null;
-    ashby_slug: string | null;
-    lever_slug: string | null;
-    website: string | null;
-  }): Promise<string | null> {
-    const { data: inserted, error } = await supabase
-      .from("watchlist_companies")
-      .insert({
-        ...data,
-        profile_id: profileId,
-      })
-      .select("id")
-      .single();
-
-    if (error) {
-      console.error("Failed to add company:", error);
-      return null;
-    }
-    return inserted?.id ?? null;
-  }
 
   function handleAddComplete() {
     setShowAddForm(false);
@@ -88,7 +66,6 @@ export default function CompanyWatchlist({
       return;
     }
 
-    // Also delete jobs from this company
     if (company) {
       const { error: jobsError } = await supabase
         .from("jobs")
@@ -114,16 +91,16 @@ export default function CompanyWatchlist({
             onClick={() => setShowAddForm(true)}
             className="px-3 py-1.5 bg-gray-900 text-white text-sm rounded-md hover:bg-gray-800"
           >
-            + Add Company
+            + Add Companies
           </button>
         )}
       </div>
 
       {showAddForm && (
         <div className="mb-4">
-          <CompanyForm
+          <BulkAddForm
             profileId={profileId}
-            onSave={handleAdd}
+            existingCompanies={companies}
             onComplete={handleAddComplete}
             onCancel={() => setShowAddForm(false)}
           />

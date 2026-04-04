@@ -19,12 +19,12 @@ const supabase = createClient(
 
 export async function POST(request: Request) {
   try {
-    const { profileId, companyId } = await request.json();
+    const { profileId, companyId, companyIds } = await request.json();
     if (!profileId) {
       return NextResponse.json({ error: "profileId required" }, { status: 400 });
     }
 
-    // 1. Load companies for this profile (optionally filtered to one)
+    // 1. Load companies for this profile (optionally filtered)
     let companiesQuery = supabase
       .from("watchlist_companies")
       .select("*")
@@ -32,6 +32,8 @@ export async function POST(request: Request) {
 
     if (companyId) {
       companiesQuery = companiesQuery.eq("id", companyId);
+    } else if (companyIds?.length) {
+      companiesQuery = companiesQuery.in("id", companyIds);
     }
 
     const { data: companies, error: compErr } = await companiesQuery;
