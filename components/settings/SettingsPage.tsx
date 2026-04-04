@@ -12,15 +12,20 @@ import ScrapeButton from "./ScrapeButton";
 function MatchModeToggle({
   mode,
   onChange,
+  label,
 }: {
   mode: MatchMode;
   onChange: (mode: MatchMode) => void;
+  label?: string;
 }) {
   return (
     <div className="flex items-center gap-1 text-xs">
       <button
         type="button"
-        onClick={() => onChange("OR")}
+        onClick={() => {
+          console.log(`[MatchModeToggle:${label}] Clicked OR, current mode:`, mode);
+          onChange("OR");
+        }}
         className={`px-2 py-0.5 rounded-l-md border transition-colors ${
           mode === "OR"
             ? "bg-gray-900 text-white border-gray-900"
@@ -31,7 +36,10 @@ function MatchModeToggle({
       </button>
       <button
         type="button"
-        onClick={() => onChange("AND")}
+        onClick={() => {
+          console.log(`[MatchModeToggle:${label}] Clicked AND, current mode:`, mode);
+          onChange("AND");
+        }}
         className={`px-2 py-0.5 rounded-r-md border border-l-0 transition-colors ${
           mode === "AND"
             ? "bg-gray-900 text-white border-gray-900"
@@ -49,6 +57,7 @@ export default function SettingsPage() {
   const { profiles, profileId, setProfileId, loading } = useProfile();
   const [companies, setCompanies] = useState<WatchlistCompany[]>([]);
   const [config, setConfig] = useState<SearchConfig | null>(null);
+  const [saveStatus, setSaveStatus] = useState<{ field: string; ok: boolean; msg: string } | null>(null);
 
   const fetchData = useCallback(async () => {
     if (!profileId) return;
@@ -67,7 +76,14 @@ export default function SettingsPage() {
     ]);
 
     setCompanies(compRes.data ?? []);
-    setConfig(cfgRes.data?.[0] ?? null);
+    const loadedConfig = cfgRes.data?.[0] ?? null;
+    console.log(`[settings] Loaded config:`, loadedConfig ? {
+      id: loadedConfig.id,
+      title_match_mode: loadedConfig.title_match_mode,
+      description_match_mode: loadedConfig.description_match_mode,
+      cross_match_mode: loadedConfig.cross_match_mode,
+    } : null);
+    setConfig(loadedConfig);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profileId]);
 
@@ -76,18 +92,36 @@ export default function SettingsPage() {
   }, [fetchData]);
 
   async function updateConfigField(field: string, value: string[] | string | boolean) {
-    if (!config) return;
-    console.log(`[settings] Updating ${field} =`, value);
-    const { error } = await supabase
+    if (!config) {
+      console.error(`[settings] updateConfigField called but config is null`);
+      return;
+    }
+    console.log(`[settings] Updating ${field} =`, JSON.stringify(value), `| config.id =`, config.id);
+
+    // Optimistic update — immediately reflect in UI
+    const prevConfig = config;
+    setConfig({ ...config, [field]: value } as SearchConfig);
+
+    const { data, error, status, statusText } = await supabase
       .from("search_configs")
       .update({ [field]: value })
-      .eq("id", config.id);
+      .eq("id", config.id)
+      .select();
+
+    console.log(`[settings] Response for ${field}:`, { status, statusText, error, data });
+
     if (error) {
       console.error(`[settings] Failed to update ${field}:`, error);
+      // Revert on failure
+      setConfig(prevConfig);
+      setSaveStatus({ field, ok: false, msg: `Failed: ${error.message}` });
     } else {
-      console.log(`[settings] Successfully updated ${field}`);
-      setConfig({ ...config, [field]: value } as SearchConfig);
+      console.log(`[settings] Successfully updated ${field}, DB value:`, data?.[0]?.[field]);
+      setSaveStatus({ field, ok: true, msg: `Saved ${field} = ${JSON.stringify(value)}` });
     }
+
+    // Auto-clear status after 3s
+    setTimeout(() => setSaveStatus(null), 3000);
   }
 
   function handleAddTag(field: "title_keywords" | "exclude_keywords" | "locations" | "description_keywords") {
@@ -124,6 +158,17 @@ export default function SettingsPage() {
           onSwitch={setProfileId}
         />
       </div>
+
+      {/* Save status toast */}
+      {saveStatus && (
+        <div className={`mb-4 px-3 py-2 rounded-md text-xs font-medium ${
+          saveStatus.ok
+            ? "bg-green-50 text-green-700 border border-green-200"
+            : "bg-red-50 text-red-700 border border-red-200"
+        }`}>
+          {saveStatus.ok ? "\u2713" : "\u2717"} {saveStatus.msg}
+        </div>
+      )}
 
       {/* Search Mode Toggle */}
       {config && (
@@ -174,6 +219,7 @@ export default function SettingsPage() {
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-sm font-medium text-gray-700">Title Keywords</label>
                 <MatchModeToggle
+                  label="title"
                   mode={config.title_match_mode ?? "OR"}
                   onChange={(mode) => updateConfigField("title_match_mode", mode)}
                 />
@@ -196,6 +242,7 @@ export default function SettingsPage() {
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-sm font-medium text-gray-700">Description Keywords</label>
                 <MatchModeToggle
+                  label="description"
                   mode={config.description_match_mode ?? "OR"}
                   onChange={(mode) => updateConfigField("description_match_mode", mode)}
                 />
