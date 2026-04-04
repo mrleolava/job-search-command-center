@@ -13,48 +13,207 @@ export interface RawJob {
 
 // ---------- Salary parsing ----------
 
-export function parseSalary(text: string | null): { min: number | null; max: number | null } {
-  if (!text) return { min: null, max: null };
+interface SalaryRange {
+  min: number | null;
+  max: number | null;
+}
 
-  const clean = text.replace(/<[^>]+>/g, " ").replace(/&[a-z]+;/g, " ");
+const HOURLY_TO_ANNUAL = 2080;
 
-  // "$120k - $160k"
-  let m = clean.match(/\$\s*(\d+)\s*[kK]\s*[-–—]+\s*\$\s*(\d+)\s*[kK]/);
-  if (m) return { min: +m[1] * 1000, max: +m[2] * 1000 };
+/** Parse a dollar amount string into a number. Handles $120k, $120K, $120,000, $120,000.00, 120000 */
+function parseDollarAmount(raw: string): number | null {
+  const s = raw.replace(/[$,\s]/g, "");
+  // "120k" or "120K"
+  const kMatch = s.match(/^(\d+(?:\.\d+)?)[kK]$/);
+  if (kMatch) return Math.round(parseFloat(kMatch[1]) * 1000);
+  // "120000" or "120000.00"
+  const numMatch = s.match(/^(\d+(?:\.\d+)?)$/);
+  if (numMatch) return Math.round(parseFloat(numMatch[1]));
+  return null;
+}
 
-  // "$120-160k"
-  m = clean.match(/\$\s*(\d+)\s*[-–—]+\s*(\d+)\s*[kK]/);
-  if (m) {
-    const v1 = +m[1], v2 = +m[2];
-    if (v1 < 1000 && v2 < 1000) return { min: v1 * 1000, max: v2 * 1000 };
+/** Normalize a parsed salary to annual. Returns null if value seems invalid. */
+function toAnnual(value: number, isHourly: boolean): number | null {
+  if (isHourly) {
+    const annual = value * HOURLY_TO_ANNUAL;
+    return annual >= 20000 ? annual : null;
+  }
+  // If raw number is small (< 500), treat as hourly even without explicit marker
+  if (value > 0 && value < 500) {
+    const annual = value * HOURLY_TO_ANNUAL;
+    return annual >= 20000 ? annual : null;
+  }
+  // Must be at least $20k to be a valid annual salary
+  return value >= 20000 ? value : null;
+}
+
+/** Extract all salary ranges from text. Returns array of {min, max} sorted by max desc. */
+function extractAllRanges(text: string): SalaryRange[] {
+  const clean = text
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&[a-z]+;/gi, " ")
+    .replace(/\s+/g, " ");
+
+  const ranges: SalaryRange[] = [];
+  const seen = new Set<string>();
+
+  function addRange(min: number | null, max: number | null) {
+    const key = `${min}-${max}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    if (min || max) ranges.push({ min, max });
   }
 
-  // "$120,000 - $160,000"
-  m = clean.match(/\$\s*([\d,]+)\s*(?:[-–—]+|to)\s*\$\s*([\d,]+)/i);
-  if (m) {
-    const v1 = parseInt(m[1].replace(/,/g, ""), 10);
-    const v2 = parseInt(m[2].replace(/,/g, ""), 10);
-    if (v1 >= 20000 && v2 >= 20000) return { min: v1, max: v2 };
-  }
+  // Check for hourly context
+  const hourlyContext = /per\s+hour|\/\s*h(?:ou)?r|\bhourlly?\b/i;
+  const isHourlyDoc = hourlyContext.test(clean);
 
-  // "$150,000 base" or "$150,000/yr"
-  m = clean.match(/\$\s*([\d,]+)\s*(?:\/\s*(?:year|yr|annually)|per\s+(?:year|annum)|base|annually)/i);
-  if (m) {
-    const v = parseInt(m[1].replace(/,/g, ""), 10);
-    if (v >= 20000) return { min: v, max: null };
-  }
+  // ---------- RANGE PATTERNS (two values) ----------
 
-  // Standalone "$120k" near salary context
-  const salaryContext = /(?:salary|compensation|pay|earning|ote|base|annual|total\s+comp)/i;
-  if (salaryContext.test(clean)) {
-    m = clean.match(/\$\s*(\d+)\s*[kK]/);
-    if (m) {
-      const v = +m[1] * 1000;
-      if (v >= 20000) return { min: v, max: null };
+  // Pattern 1: "$120,000 - $160,000" / "$120K - $160K" / "$120k-$160k" / "$120,000.00 - $160,000.00"
+  // Also: "USD $120,000 - $200,000" / "$120,000 to $160,000" / "$120,000 and $200,000"
+  const rangeWithDollar = /\$\s*([\d,.]+[kK]?)\s*(?:[-–—]+|to|and)\s*\$\s*([\d,.]+[kK]?)/g;
+  let m;
+  while ((m = rangeWithDollar.exec(clean)) !== null) {
+    const nearText = clean.slice(Math.max(0, m.index - 30), m.index + m[0].length + 30);
+    const isHourly = isHourlyDoc || hourlyContext.test(nearText);
+    const v1 = parseDollarAmount(m[1]);
+    const v2 = parseDollarAmount(m[2]);
+    if (v1 !== null && v2 !== null) {
+      const a1 = toAnnual(v1, isHourly);
+      const a2 = toAnnual(v2, isHourly);
+      if (a1 || a2) addRange(a1, a2);
     }
   }
 
-  return { min: null, max: null };
+  // Pattern 2: "$120-160k" / "$120 - $160k" / "120-160K" / "Compensation: 150-200k"
+  const rangeShortK = /\$?\s*(\d+)\s*[-–—]+\s*\$?\s*(\d+)\s*[kK]/g;
+  while ((m = rangeShortK.exec(clean)) !== null) {
+    const v1 = +m[1], v2 = +m[2];
+    if (v1 > 0 && v1 < 1000 && v2 > 0 && v2 < 1000) {
+      addRange(v1 * 1000, v2 * 1000);
+    }
+  }
+
+  // Pattern 3: "Pay Range: 150000-200000" / "120,000 - 160,000 USD"
+  const rangeNoDollar = /(?:pay|salary|compensation|range|between)\s*:?\s*([\d,]+)\s*[-–—]+\s*([\d,]+)/gi;
+  while ((m = rangeNoDollar.exec(clean)) !== null) {
+    const v1 = parseInt(m[1].replace(/,/g, ""), 10);
+    const v2 = parseInt(m[2].replace(/,/g, ""), 10);
+    if (v1 >= 20000 && v2 >= 20000) addRange(v1, v2);
+  }
+
+  // Pattern 4: "between $150,000 and $200,000"
+  const betweenPattern = /between\s+\$\s*([\d,.]+[kK]?)\s+and\s+\$\s*([\d,.]+[kK]?)/gi;
+  while ((m = betweenPattern.exec(clean)) !== null) {
+    const v1 = parseDollarAmount(m[1]);
+    const v2 = parseDollarAmount(m[2]);
+    if (v1 !== null && v2 !== null) {
+      const a1 = toAnnual(v1, false);
+      const a2 = toAnnual(v2, false);
+      if (a1 || a2) addRange(a1, a2);
+    }
+  }
+
+  // Pattern 5: "$70 - $90 per hour" (explicit hourly range)
+  const hourlyRange = /\$\s*([\d,.]+)\s*[-–—]+\s*\$\s*([\d,.]+)\s*(?:per\s+hour|\/\s*h(?:ou)?r)/gi;
+  while ((m = hourlyRange.exec(clean)) !== null) {
+    const v1 = parseFloat(m[1].replace(/,/g, ""));
+    const v2 = parseFloat(m[2].replace(/,/g, ""));
+    if (v1 > 0 && v2 > 0) {
+      addRange(Math.round(v1 * HOURLY_TO_ANNUAL), Math.round(v2 * HOURLY_TO_ANNUAL));
+    }
+  }
+
+  // Pattern 6: "120,000 - 160,000 USD" (no dollar sign, USD suffix)
+  const usdSuffix = /([\d,]+)\s*[-–—]+\s*([\d,]+)\s*USD/gi;
+  while ((m = usdSuffix.exec(clean)) !== null) {
+    const v1 = parseInt(m[1].replace(/,/g, ""), 10);
+    const v2 = parseInt(m[2].replace(/,/g, ""), 10);
+    if (v1 >= 20000 && v2 >= 20000) addRange(v1, v2);
+  }
+
+  // Pattern 7: "USD $150,000 - $200,000"
+  const usdPrefix = /USD\s+\$\s*([\d,.]+[kK]?)\s*[-–—]+\s*\$\s*([\d,.]+[kK]?)/gi;
+  while ((m = usdPrefix.exec(clean)) !== null) {
+    const v1 = parseDollarAmount(m[1]);
+    const v2 = parseDollarAmount(m[2]);
+    if (v1 !== null && v2 !== null) {
+      const a1 = toAnnual(v1, false);
+      const a2 = toAnnual(v2, false);
+      if (a1 || a2) addRange(a1, a2);
+    }
+  }
+
+  // ---------- SINGLE VALUE PATTERNS ----------
+
+  // Pattern 8: "$150k+" / "$150,000+"
+  const plusPattern = /\$\s*([\d,.]+[kK]?)\s*\+/g;
+  while ((m = plusPattern.exec(clean)) !== null) {
+    const v = parseDollarAmount(m[1]);
+    if (v !== null && v >= 20000) addRange(v, null);
+  }
+
+  // Pattern 9: "$150,000 base" / "$150K base" / "$150,000/yr" / "$150,000 annually" / "$150,000 per year"
+  const singleAnnual = /\$\s*([\d,.]+[kK]?)\s*(?:\/\s*(?:year|yr|annually)|per\s+(?:year|annum)|base|annually|annual)/gi;
+  while ((m = singleAnnual.exec(clean)) !== null) {
+    const v = parseDollarAmount(m[1]);
+    if (v !== null && v >= 20000) addRange(v, null);
+  }
+
+  // Pattern 10: "$X per hour" single value
+  const singleHourly = /\$\s*([\d,.]+)\s*(?:per\s+hour|\/\s*h(?:ou)?r)/gi;
+  while ((m = singleHourly.exec(clean)) !== null) {
+    const v = parseFloat(m[1].replace(/,/g, ""));
+    if (v > 0 && v < 500) addRange(Math.round(v * HOURLY_TO_ANNUAL), null);
+  }
+
+  // Pattern 11: Standalone "$120k" or "$120K" near salary context words
+  if (ranges.length === 0) {
+    const ctxPattern = /(?:salary|compensation|pay\s|earning|ote|base|total\s+comp|annual|range|offer)/i;
+    if (ctxPattern.test(clean)) {
+      const standalone = /\$\s*(\d+)\s*[kK]/g;
+      while ((m = standalone.exec(clean)) !== null) {
+        const v = +m[1] * 1000;
+        if (v >= 20000) addRange(v, null);
+      }
+    }
+  }
+
+  // Pattern 12: Standalone "$120,000" near salary context (fallback)
+  if (ranges.length === 0) {
+    const ctxPattern = /(?:salary|compensation|pay\s|earning|ote|base|total\s+comp|annual|range|offer)/i;
+    if (ctxPattern.test(clean)) {
+      const standaloneNum = /\$\s*([\d,]+(?:\.\d{2})?)\b/g;
+      while ((m = standaloneNum.exec(clean)) !== null) {
+        const v = parseInt(m[1].replace(/,/g, ""), 10);
+        if (v >= 20000) addRange(v, null);
+      }
+    }
+  }
+
+  return ranges;
+}
+
+/**
+ * Parse salary from text. Searches the entire text for all salary ranges.
+ * When multiple ranges are found, prefers OTE/total comp over base, takes the highest.
+ */
+export function parseSalary(text: string | null): SalaryRange {
+  if (!text) return { min: null, max: null };
+
+  const ranges = extractAllRanges(text);
+  if (ranges.length === 0) return { min: null, max: null };
+  if (ranges.length === 1) return ranges[0];
+
+  // Prefer the range with the highest max (likely OTE/total comp)
+  const best = ranges.reduce((a, b) => {
+    const aMax = a.max ?? a.min ?? 0;
+    const bMax = b.max ?? b.min ?? 0;
+    return bMax > aMax ? b : a;
+  });
+
+  return best;
 }
 
 // ---------- API fetchers ----------
@@ -63,7 +222,7 @@ export async function fetchGreenhouseJobs(
   companyName: string,
   slug: string
 ): Promise<RawJob[]> {
-  const url = `https://boards-api.greenhouse.io/v1/boards/${slug}/jobs?content=true`;
+  const url = `https://boards-api.greenhouse.io/v1/boards/${slug}/jobs?content=true&pay_transparency=true`;
   try {
     const res = await fetch(url);
     if (!res.ok) return [];
@@ -71,7 +230,27 @@ export async function fetchGreenhouseJobs(
     return (data.jobs ?? []).map(// eslint-disable-next-line @typescript-eslint/no-explicit-any
     (j: any) => {
       const content = j.content ?? "";
-      const salary = parseSalary(content);
+
+      // Prefer structured pay_input_ranges (values in cents)
+      let salaryMin: number | null = null;
+      let salaryMax: number | null = null;
+      const payRanges: unknown[] = j.pay_input_ranges ?? [];
+      if (payRanges.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const usdRange = payRanges.find((r: any) => r.currency_type === "USD") ?? payRanges[0];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const r = usdRange as any;
+        if (r.min_cents) salaryMin = Math.round(r.min_cents / 100);
+        if (r.max_cents) salaryMax = Math.round(r.max_cents / 100);
+      }
+
+      // Fall back to parsing description
+      if (!salaryMin && !salaryMax) {
+        const salary = parseSalary(content);
+        salaryMin = salary.min;
+        salaryMax = salary.max;
+      }
+
       return {
         company: companyName,
         title: j.title ?? "",
@@ -80,8 +259,8 @@ export async function fetchGreenhouseJobs(
         date_posted: j.updated_at ?? j.first_published_at ?? null,
         source: "greenhouse",
         is_remote: (j.location?.name ?? "").toLowerCase().includes("remote") || false,
-        salary_min: salary.min,
-        salary_max: salary.max,
+        salary_min: salaryMin,
+        salary_max: salaryMax,
         description: content || null,
       };
     });
@@ -95,7 +274,7 @@ export async function fetchAshbyJobs(
   companyName: string,
   slug: string
 ): Promise<RawJob[]> {
-  const url = `https://api.ashbyhq.com/posting-api/job-board/${slug}`;
+  const url = `https://api.ashbyhq.com/posting-api/job-board/${slug}?includeCompensation=true`;
   try {
     const res = await fetch(url);
     if (!res.ok) return [];
@@ -104,7 +283,32 @@ export async function fetchAshbyJobs(
     return (data.jobs ?? []).map((j: any) => {
       const desc = j.descriptionPlain ?? "";
       const descHtml = j.descriptionHtml ?? "";
-      const salary = parseSalary(desc) ?? parseSalary(descHtml);
+
+      // Prefer structured compensation data
+      let salaryMin: number | null = null;
+      let salaryMax: number | null = null;
+      const comp = j.compensation;
+      if (comp?.summaryComponents) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const salaryComp = comp.summaryComponents.find((c: any) => c.compensationType === "Salary");
+        if (salaryComp) {
+          if (salaryComp.minValue) salaryMin = salaryComp.minValue;
+          if (salaryComp.maxValue) salaryMax = salaryComp.maxValue;
+          // Convert hourly to annual
+          if (salaryComp.interval === "1 HOUR") {
+            if (salaryMin) salaryMin = salaryMin * HOURLY_TO_ANNUAL;
+            if (salaryMax) salaryMax = salaryMax * HOURLY_TO_ANNUAL;
+          }
+        }
+      }
+
+      // Fall back to parsing description
+      if (!salaryMin && !salaryMax) {
+        const salary = parseSalary(desc || descHtml);
+        salaryMin = salary.min;
+        salaryMax = salary.max;
+      }
+
       return {
         company: companyName,
         title: j.title ?? "",
@@ -115,8 +319,8 @@ export async function fetchAshbyJobs(
         is_remote:
           (j.location ?? "").toLowerCase().includes("remote") ||
           j.isRemote === true,
-        salary_min: salary.min,
-        salary_max: salary.max,
+        salary_min: salaryMin,
+        salary_max: salaryMax,
         description: desc || null,
       };
     });
@@ -141,8 +345,23 @@ export async function fetchLeverJobs(
       const desc = j.descriptionPlain ?? j.description ?? "";
       const additional = j.additionalPlain ?? j.additional ?? "";
       const fullText = desc + " " + additional;
-      const salary = parseSalary(fullText);
       const location = j.categories?.location ?? null;
+
+      // Prefer structured salaryRange
+      let salaryMin: number | null = null;
+      let salaryMax: number | null = null;
+      if (j.salaryRange) {
+        if (j.salaryRange.min) salaryMin = j.salaryRange.min;
+        if (j.salaryRange.max) salaryMax = j.salaryRange.max;
+      }
+
+      // Fall back to parsing description
+      if (!salaryMin && !salaryMax) {
+        const salary = parseSalary(fullText);
+        salaryMin = salary.min;
+        salaryMax = salary.max;
+      }
+
       return {
         company: companyName,
         title: j.text ?? "",
@@ -151,8 +370,8 @@ export async function fetchLeverJobs(
         date_posted: j.createdAt ? new Date(j.createdAt).toISOString() : null,
         source: "lever",
         is_remote: (location ?? "").toLowerCase().includes("remote"),
-        salary_min: salary.min,
-        salary_max: salary.max,
+        salary_min: salaryMin,
+        salary_max: salaryMax,
         description: desc || null,
       };
     });
