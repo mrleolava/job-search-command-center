@@ -82,11 +82,11 @@ async function scrapeCareerPage(website: string): Promise<{
   greenhouse?: string;
   lever?: string;
   ashby?: string;
+  workday?: boolean;
 }> {
-  const results: { greenhouse?: string; lever?: string; ashby?: string } = {};
-  const urls = [website.replace(/\/$/, "")];
-  // Try /careers and /jobs pages
-  urls.push(urls[0] + "/careers", urls[0] + "/jobs");
+  const results: { greenhouse?: string; lever?: string; ashby?: string; workday?: boolean } = {};
+  const base = website.replace(/\/$/, "");
+  const urls = [base, base + "/careers", base + "/jobs", base + "/careers/jobs", base + "/company/careers"];
 
   for (const url of urls) {
     try {
@@ -117,6 +117,11 @@ async function scrapeCareerPage(website: string): Promise<{
       );
       if (ashbyMatch && !results.ashby) results.ashby = ashbyMatch[1].toLowerCase();
 
+      // Look for Workday links
+      if (!results.workday && /myworkdayjobs\.com/i.test(html)) {
+        results.workday = true;
+      }
+
       if (results.greenhouse || results.lever || results.ashby) break;
     } catch {
       continue;
@@ -133,10 +138,11 @@ export async function POST(request: NextRequest) {
   }
 
   const slugs = generateSlugs(name, website);
-  const detected: { greenhouse: string | null; lever: string | null; ashby: string | null } = {
+  const detected: { greenhouse: string | null; lever: string | null; ashby: string | null; workday: boolean } = {
     greenhouse: null,
     lever: null,
     ashby: null,
+    workday: false,
   };
 
   // Test all slug variations against all boards in parallel
@@ -172,6 +178,9 @@ export async function POST(request: NextRequest) {
       if (await testAshby(scraped.ashby)) {
         detected.ashby = scraped.ashby;
       }
+    }
+    if (scraped.workday) {
+      detected.workday = true;
     }
   }
 

@@ -27,14 +27,24 @@ export default function CompanyWatchlist({
     ashby_slug: string | null;
     lever_slug: string | null;
     website: string | null;
-  }) {
-    const { error } = await supabase.from("watchlist_companies").insert({
-      ...data,
-      profile_id: profileId,
-    });
+  }): Promise<string | null> {
+    const { data: inserted, error } = await supabase
+      .from("watchlist_companies")
+      .insert({
+        ...data,
+        profile_id: profileId,
+      })
+      .select("id")
+      .single();
+
     if (error) {
       console.error("Failed to add company:", error);
+      return null;
     }
+    return inserted?.id ?? null;
+  }
+
+  function handleAddComplete() {
     setShowAddForm(false);
     onUpdate();
   }
@@ -48,14 +58,19 @@ export default function CompanyWatchlist({
       lever_slug: string | null;
       website: string | null;
     }
-  ) {
+  ): Promise<string | null> {
     const { error } = await supabase
       .from("watchlist_companies")
       .update(data)
       .eq("id", id);
     if (error) {
       console.error("Failed to update company:", error);
+      return null;
     }
+    return id;
+  }
+
+  function handleEditComplete() {
     setEditingId(null);
     onUpdate();
   }
@@ -106,7 +121,12 @@ export default function CompanyWatchlist({
 
       {showAddForm && (
         <div className="mb-4">
-          <CompanyForm onSave={handleAdd} onCancel={() => setShowAddForm(false)} />
+          <CompanyForm
+            profileId={profileId}
+            onSave={handleAdd}
+            onComplete={handleAddComplete}
+            onCancel={() => setShowAddForm(false)}
+          />
         </div>
       )}
 
@@ -116,7 +136,9 @@ export default function CompanyWatchlist({
             <CompanyForm
               key={co.id}
               company={co}
+              profileId={profileId}
               onSave={(data) => handleEdit(co.id, data)}
+              onComplete={handleEditComplete}
               onCancel={() => setEditingId(null)}
             />
           ) : (

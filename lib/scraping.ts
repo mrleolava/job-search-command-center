@@ -126,6 +126,42 @@ export async function fetchAshbyJobs(
   }
 }
 
+export async function fetchLeverJobs(
+  companyName: string,
+  slug: string
+): Promise<RawJob[]> {
+  const url = `https://api.lever.co/v0/postings/${slug}?mode=json`;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return [];
+    const data = await res.json();
+    if (!Array.isArray(data)) return [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return data.map((j: any) => {
+      const desc = j.descriptionPlain ?? j.description ?? "";
+      const additional = j.additionalPlain ?? j.additional ?? "";
+      const fullText = desc + " " + additional;
+      const salary = parseSalary(fullText);
+      const location = j.categories?.location ?? null;
+      return {
+        company: companyName,
+        title: j.text ?? "",
+        url: j.hostedUrl ?? `https://jobs.lever.co/${slug}/${j.id}`,
+        location,
+        date_posted: j.createdAt ? new Date(j.createdAt).toISOString() : null,
+        source: "lever",
+        is_remote: (location ?? "").toLowerCase().includes("remote"),
+        salary_min: salary.min,
+        salary_max: salary.max,
+        description: desc || null,
+      };
+    });
+  } catch {
+    console.error(`[lever] Error fetching ${slug}`);
+    return [];
+  }
+}
+
 // ---------- Filtering ----------
 
 export function matchesKeywords(title: string, keywords: string[]): boolean {

@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import {
   fetchGreenhouseJobs,
+  fetchLeverJobs,
   fetchAshbyJobs,
   matchesKeywords,
   matchesExcludes,
@@ -18,16 +19,22 @@ const supabase = createClient(
 
 export async function POST(request: Request) {
   try {
-    const { profileId } = await request.json();
+    const { profileId, companyId } = await request.json();
     if (!profileId) {
       return NextResponse.json({ error: "profileId required" }, { status: 400 });
     }
 
-    // 1. Load companies for this profile
-    const { data: companies, error: compErr } = await supabase
+    // 1. Load companies for this profile (optionally filtered to one)
+    let companiesQuery = supabase
       .from("watchlist_companies")
       .select("*")
       .eq("profile_id", profileId);
+
+    if (companyId) {
+      companiesQuery = companiesQuery.eq("id", companyId);
+    }
+
+    const { data: companies, error: compErr } = await companiesQuery;
 
     if (compErr) {
       return NextResponse.json({ error: compErr.message }, { status: 500 });
@@ -61,6 +68,8 @@ export async function POST(request: Request) {
 
       if (co.greenhouse_slug) {
         jobs = await fetchGreenhouseJobs(name, co.greenhouse_slug);
+      } else if (co.lever_slug) {
+        jobs = await fetchLeverJobs(name, co.lever_slug);
       } else if (co.ashby_slug) {
         jobs = await fetchAshbyJobs(name, co.ashby_slug);
       } else {
