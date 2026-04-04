@@ -8,9 +8,10 @@ interface JobListProps {
   savedJobIds: Set<string>;
   onSave: (job: Job) => void;
   onDismiss: (job: Job) => void;
+  matchedKeywords?: Map<string, { title: string[]; description: string[] }>;
 }
 
-export default function JobList({ jobs, savedJobIds, onSave, onDismiss }: JobListProps) {
+export default function JobList({ jobs, savedJobIds, onSave, onDismiss, matchedKeywords }: JobListProps) {
   if (jobs.length === 0) {
     return (
       <div className="text-center py-16">
@@ -29,6 +30,7 @@ export default function JobList({ jobs, savedJobIds, onSave, onDismiss }: JobLis
           isSaved={savedJobIds.has(job.id)}
           onSave={onSave}
           onDismiss={onDismiss}
+          matchedKeywords={matchedKeywords?.get(job.id)}
         />
       ))}
     </div>

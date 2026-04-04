@@ -87,10 +87,16 @@ export interface WatchlistCompany {
   profile_id: string;
 }
 
+export type MatchMode = "AND" | "OR";
+
 export interface SearchConfig {
   id: string;
   profile_id: string;
   title_keywords: string[];
   exclude_keywords: string[];
   locations: string[];
+  description_keywords: string[];
+  title_match_mode: MatchMode;
+  description_match_mode: MatchMode;
+  cross_match_mode: MatchMode;
 }

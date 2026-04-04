@@ -22,7 +22,7 @@ export default function TagEditor({ label, tags, onAdd, onRemove }: TagEditorPro
 
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1.5">{label}</label>
+      {label && <label className="block text-sm font-medium text-gray-700 mb-1.5">{label}</label>}
       <div className="flex flex-wrap gap-1.5 mb-2">
         {tags.map((tag) => (
           <span

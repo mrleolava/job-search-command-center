@@ -8,11 +8,39 @@ interface JobCardProps {
   onSave: (job: Job) => void;
   onDismiss: (job: Job) => void;
   isSaved: boolean;
+  matchedKeywords?: { title: string[]; description: string[] };
 }
 
-export default function JobCard({ job, onSave, onDismiss, isSaved }: JobCardProps) {
+function highlightText(text: string, keywords: string[]): React.ReactNode {
+  if (!keywords.length) return text;
+
+  // Build a regex that matches any keyword (case-insensitive)
+  const escaped = keywords.map((kw) =>
+    kw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  );
+  const regex = new RegExp(`(${escaped.join("|")})`, "gi");
+  const parts = text.split(regex);
+
+  return parts.map((part, i) => {
+    const isMatch = keywords.some(
+      (kw) => part.toLowerCase() === kw.toLowerCase()
+    );
+    if (isMatch) {
+      return (
+        <mark key={i} className="bg-yellow-200 text-yellow-900 rounded px-0.5">
+          {part}
+        </mark>
+      );
+    }
+    return part;
+  });
+}
+
+export default function JobCard({ job, onSave, onDismiss, isSaved, matchedKeywords }: JobCardProps) {
   const salary = formatSalary(job.salary_min, job.salary_max);
   const badge = seniorityBadge(job.seniority_score);
+  const titleKw = matchedKeywords?.title ?? [];
+  const descKw = matchedKeywords?.description ?? [];
 
   return (
     <div
@@ -31,21 +59,25 @@ export default function JobCard({ job, onSave, onDismiss, isSaved }: JobCardProp
                 rel="noopener noreferrer"
                 className="hover:underline"
               >
-                {job.title}
+                {titleKw.length > 0
+                  ? highlightText(job.title ?? "", titleKw)
+                  : job.title}
               </a>
+            ) : titleKw.length > 0 ? (
+              highlightText(job.title ?? "", titleKw)
             ) : (
               job.title
             )}
           </h3>
           <div className="flex flex-wrap gap-2 mt-2 text-sm text-gray-500">
             {job.location && <span>{job.location}</span>}
-            <span className="text-gray-300">·</span>
+            <span className="text-gray-300">&middot;</span>
             <span className={job.salary_min || job.salary_max ? "text-green-700 font-medium" : "text-gray-400"}>
               {salary}
             </span>
             {job.application_count != null && (
               <>
-                <span className="text-gray-300">·</span>
+                <span className="text-gray-300">&middot;</span>
                 <span className={applicantColor(job.application_count)}>
                   {job.application_count} applicants
                 </span>
@@ -53,7 +85,7 @@ export default function JobCard({ job, onSave, onDismiss, isSaved }: JobCardProp
             )}
             {job.date_posted && (
               <>
-                <span className="text-gray-300">·</span>
+                <span className="text-gray-300">&middot;</span>
                 <span>{timeAgo(job.date_posted)}</span>
               </>
             )}
@@ -78,6 +110,16 @@ export default function JobCard({ job, onSave, onDismiss, isSaved }: JobCardProp
               <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700">
                 {job.job_type}
               </span>
+            )}
+            {descKw.length > 0 && (
+              descKw.map((kw) => (
+                <span
+                  key={kw}
+                  className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800"
+                >
+                  {kw}
+                </span>
+              ))
             )}
           </div>
         </div>

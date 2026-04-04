@@ -7,6 +7,7 @@ import { useProfile } from "@/lib/useProfile";
 import ProfileSwitcher from "@/components/settings/ProfileSwitcher";
 import FilterBar from "./FilterBar";
 import JobList from "./JobList";
+import { getMatchedKeywords } from "@/lib/scraping";
 
 export default function JobFeed() {
   const { profiles, profileId, setProfileId, profileSlug, loading: profileLoading } = useProfile();
@@ -66,11 +67,18 @@ export default function JobFeed() {
     [watchlistCompanies]
   );
 
-  // Title keywords from search config (lowercased)
+  // Keywords from search config
   const titleKeywords = useMemo(
     () => (searchConfig?.title_keywords ?? []).map((k) => k.toLowerCase()),
     [searchConfig]
   );
+  const descriptionKeywords = useMemo(
+    () => (searchConfig?.description_keywords ?? []).map((k) => k.toLowerCase()),
+    [searchConfig]
+  );
+  const titleMatchMode = searchConfig?.title_match_mode ?? "OR";
+  const descriptionMatchMode = searchConfig?.description_match_mode ?? "OR";
+  const crossMatchMode = searchConfig?.cross_match_mode ?? "AND";
 
   // Derive unique locations and sources for filter dropdowns
   const locations = useMemo(
@@ -84,25 +92,53 @@ export default function JobFeed() {
 
   const hasWatchlist = watchlistCompanies.length > 0;
 
-  // Client-side filtering and sorting
+  // Client-side filtering with boolean logic
   const filteredJobs = useMemo(() => {
-    // If no watchlist companies, show zero jobs (not all jobs)
     if (!hasWatchlist) return [];
 
     const result = jobs.filter((job) => {
-      // Filter by watchlist companies — always enforce
+      // Filter by watchlist companies
       if (!job.company || !watchlistNames.has(job.company.toLowerCase())) return false;
 
-      // Filter by title keywords (match any)
-      if (titleKeywords.length > 0 && job.title) {
+      // Exclude keywords always block
+      if (job.title) {
         const titleLower = job.title.toLowerCase();
-        if (!titleKeywords.some((kw) => titleLower.includes(kw))) return false;
+        const excludes = searchConfig?.exclude_keywords ?? [];
+        if (excludes.some((kw) => titleLower.includes(kw.toLowerCase()))) return false;
       }
 
       if (!showDismissed && job.is_dismissed) return false;
-
-      // Hide score=0 always; filter by min seniority
       if ((job.seniority_score ?? 0) < minSeniority) return false;
+
+      // Boolean keyword matching
+      const hasTitleKw = titleKeywords.length > 0;
+      const hasDescKw = descriptionKeywords.length > 0;
+
+      if (hasTitleKw || hasDescKw) {
+        const titleMatch = !hasTitleKw || (() => {
+          if (!job.title) return false;
+          const lower = job.title.toLowerCase();
+          if (titleMatchMode === "AND") {
+            return titleKeywords.every((kw) => lower.includes(kw));
+          }
+          return titleKeywords.some((kw) => lower.includes(kw));
+        })();
+
+        const descMatch = !hasDescKw || (() => {
+          if (!job.description) return false;
+          const lower = job.description.toLowerCase();
+          if (descriptionMatchMode === "AND") {
+            return descriptionKeywords.every((kw) => lower.includes(kw));
+          }
+          return descriptionKeywords.some((kw) => lower.includes(kw));
+        })();
+
+        if (crossMatchMode === "AND") {
+          if (!titleMatch || !descMatch) return false;
+        } else {
+          if (!titleMatch && !descMatch) return false;
+        }
+      }
 
       if (search) {
         const q = search.toLowerCase();
@@ -131,7 +167,6 @@ export default function JobFeed() {
       return true;
     });
 
-    // Sort: seniority desc, then salary_max desc (nulls last)
     result.sort((a, b) => {
       const senDiff = (b.seniority_score ?? 0) - (a.seniority_score ?? 0);
       if (senDiff !== 0) return senDiff;
@@ -141,7 +176,22 @@ export default function JobFeed() {
     });
 
     return result;
-  }, [jobs, hasWatchlist, watchlistNames, titleKeywords, search, location, source, dateRange, minSalary, minSeniority, remoteOnly, showDismissed]);
+  }, [jobs, hasWatchlist, watchlistNames, titleKeywords, descriptionKeywords, titleMatchMode, descriptionMatchMode, crossMatchMode, searchConfig, search, location, source, dateRange, minSalary, minSeniority, remoteOnly, showDismissed]);
+
+  // Compute matched keywords for each job (for highlighting)
+  const jobMatchedKeywords = useMemo(() => {
+    const map = new Map<string, { title: string[]; description: string[] }>();
+    const allTitleKw = searchConfig?.title_keywords ?? [];
+    const allDescKw = searchConfig?.description_keywords ?? [];
+
+    for (const job of filteredJobs) {
+      map.set(job.id, {
+        title: getMatchedKeywords(job.title ?? "", allTitleKw),
+        description: getMatchedKeywords(job.description ?? "", allDescKw),
+      });
+    }
+    return map;
+  }, [filteredJobs, searchConfig]);
 
   async function handleSave(job: Job) {
     const supabase = createClient();
@@ -155,7 +205,6 @@ export default function JobFeed() {
 
   async function handleDismiss(job: Job) {
     const newDismissed = !job.is_dismissed;
-    // Optimistic update
     setJobs((prev) =>
       prev.map((j) => (j.id === job.id ? { ...j, is_dismissed: newDismissed } : j))
     );
@@ -170,6 +219,9 @@ export default function JobFeed() {
       </div>
     );
   }
+
+  const hasTitleKw = titleKeywords.length > 0;
+  const hasDescKw = descriptionKeywords.length > 0;
 
   return (
     <div className="max-w-4xl mx-auto py-6 px-6">
@@ -204,6 +256,37 @@ export default function JobFeed() {
         locations={locations}
         sources={sources}
       />
+      {/* Filter logic indicator */}
+      {(hasTitleKw || hasDescKw) && (
+        <div className="bg-blue-50 border border-blue-200 rounded-md px-3 py-2 mb-4 text-xs text-blue-700 flex flex-wrap items-center gap-1">
+          <span className="font-medium">Filter:</span>
+          {hasTitleKw && (
+            <span>
+              Title matches {titleMatchMode === "OR" ? "any" : "all"} of{" "}
+              {(searchConfig?.title_keywords ?? []).map((kw, i) => (
+                <span key={kw}>
+                  {i > 0 && <span className="text-blue-400"> {titleMatchMode === "OR" ? "or" : "&"} </span>}
+                  <span className="font-medium">&ldquo;{kw}&rdquo;</span>
+                </span>
+              ))}
+            </span>
+          )}
+          {hasTitleKw && hasDescKw && (
+            <span className="font-bold text-blue-500 mx-1">{crossMatchMode}</span>
+          )}
+          {hasDescKw && (
+            <span>
+              Description matches {descriptionMatchMode === "OR" ? "any" : "all"} of{" "}
+              {(searchConfig?.description_keywords ?? []).map((kw, i) => (
+                <span key={kw}>
+                  {i > 0 && <span className="text-blue-400"> {descriptionMatchMode === "OR" ? "or" : "&"} </span>}
+                  <span className="font-medium">&ldquo;{kw}&rdquo;</span>
+                </span>
+              ))}
+            </span>
+          )}
+        </div>
+      )}
       {!hasWatchlist ? (
         <div className="text-center py-16">
           <p className="text-gray-500">No companies in your watchlist yet.</p>
@@ -217,6 +300,7 @@ export default function JobFeed() {
           savedJobIds={savedJobIds}
           onSave={handleSave}
           onDismiss={handleDismiss}
+          matchedKeywords={jobMatchedKeywords}
         />
       )}
     </div>

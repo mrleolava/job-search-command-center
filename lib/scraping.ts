@@ -164,8 +164,18 @@ export async function fetchLeverJobs(
 
 // ---------- Filtering ----------
 
-export function matchesKeywords(title: string, keywords: string[]): boolean {
-  const lower = title.toLowerCase();
+import { MatchMode } from "./types";
+
+export function matchesKeywords(
+  text: string,
+  keywords: string[],
+  mode: MatchMode = "OR"
+): boolean {
+  if (!keywords.length) return true;
+  const lower = text.toLowerCase();
+  if (mode === "AND") {
+    return keywords.every((kw) => lower.includes(kw.toLowerCase()));
+  }
   return keywords.some((kw) => lower.includes(kw.toLowerCase()));
 }
 
@@ -183,4 +193,13 @@ export function matchesLocation(
   const locLower = (location ?? "").toLowerCase();
   if (isRemote || locLower.includes("remote")) return true;
   return locationFilters.some((loc) => locLower.includes(loc.toLowerCase()));
+}
+
+export function getMatchedKeywords(
+  text: string,
+  keywords: string[]
+): string[] {
+  if (!text || !keywords.length) return [];
+  const lower = text.toLowerCase();
+  return keywords.filter((kw) => lower.includes(kw.toLowerCase()));
 }

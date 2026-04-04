@@ -58,6 +58,10 @@ export async function POST(request: Request) {
     const titleKeywords: string[] = config.title_keywords ?? [];
     const excludeKeywords: string[] = config.exclude_keywords ?? [];
     const locations: string[] = config.locations ?? [];
+    const descriptionKeywords: string[] = config.description_keywords ?? [];
+    const titleMatchMode = config.title_match_mode ?? "OR";
+    const descriptionMatchMode = config.description_match_mode ?? "OR";
+    const crossMatchMode = config.cross_match_mode ?? "AND";
 
     // 3. Fetch jobs from all companies
     const allRaw: RawJob[] = [];
@@ -79,12 +83,24 @@ export async function POST(request: Request) {
       allRaw.push(...jobs);
     }
 
-    // 4. Filter
+    // 4. Filter with boolean logic
     const filtered = allRaw.filter((job) => {
-      if (titleKeywords.length && !matchesKeywords(job.title, titleKeywords)) return false;
+      // Exclude keywords always block
       if (matchesExcludes(job.title, excludeKeywords)) return false;
       if (!matchesLocation(job.location, job.is_remote, locations)) return false;
-      return true;
+
+      const hasTitleKw = titleKeywords.length > 0;
+      const hasDescKw = descriptionKeywords.length > 0;
+
+      if (!hasTitleKw && !hasDescKw) return true;
+
+      const titleMatch = !hasTitleKw || matchesKeywords(job.title, titleKeywords, titleMatchMode);
+      const descMatch = !hasDescKw || matchesKeywords(job.description ?? "", descriptionKeywords, descriptionMatchMode);
+
+      if (crossMatchMode === "AND") {
+        return titleMatch && descMatch;
+      }
+      return titleMatch || descMatch;
     });
 
     // 5. Score seniority and remove entry-level
