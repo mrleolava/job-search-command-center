@@ -77,11 +77,15 @@ export default function SettingsPage() {
 
   async function updateConfigField(field: string, value: string[] | string | boolean) {
     if (!config) return;
+    console.log(`[settings] Updating ${field} =`, value);
     const { error } = await supabase
       .from("search_configs")
       .update({ [field]: value })
       .eq("id", config.id);
-    if (!error) {
+    if (error) {
+      console.error(`[settings] Failed to update ${field}:`, error);
+    } else {
+      console.log(`[settings] Successfully updated ${field}`);
       setConfig({ ...config, [field]: value } as SearchConfig);
     }
   }
