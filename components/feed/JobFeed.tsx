@@ -1,31 +1,73 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 import { Job, WatchlistCompany, SearchConfig } from "@/lib/types";
 import { useProfile } from "@/lib/useProfile";
 import ProfileSwitcher from "@/components/settings/ProfileSwitcher";
-import FilterBar from "./FilterBar";
+import FilterBar, { FilterState } from "./FilterBar";
 import JobList from "./JobList";
 import { getMatchedKeywords } from "@/lib/scraping";
 
+function parseFiltersFromParams(params: URLSearchParams): FilterState {
+  return {
+    search: params.get("q") ?? "",
+    sortBy: params.get("sort") ?? "date",
+    locations: params.get("loc") ? params.get("loc")!.split(",") : [],
+    companies: params.get("co") ? params.get("co")!.split(",") : [],
+    dateRange: params.get("date") ?? "",
+    minSalary: Number(params.get("minSal")) || 0,
+    maxSalary: Number(params.get("maxSal")) || 0,
+    hideNoSalary: params.get("noSal") === "1",
+    minSeniority: Number(params.get("sen")) || 1,
+    remoteOnly: params.get("remote") === "1",
+    showDismissed: params.get("dismissed") === "1",
+  };
+}
+
+function serializeFiltersToParams(f: FilterState): string {
+  const p = new URLSearchParams();
+  if (f.search) p.set("q", f.search);
+  if (f.sortBy !== "date") p.set("sort", f.sortBy);
+  if (f.locations.length) p.set("loc", f.locations.join(","));
+  if (f.companies.length) p.set("co", f.companies.join(","));
+  if (f.dateRange) p.set("date", f.dateRange);
+  if (f.minSalary) p.set("minSal", String(f.minSalary));
+  if (f.maxSalary) p.set("maxSal", String(f.maxSalary));
+  if (f.hideNoSalary) p.set("noSal", "1");
+  if (f.minSeniority > 1) p.set("sen", String(f.minSeniority));
+  if (f.remoteOnly) p.set("remote", "1");
+  if (f.showDismissed) p.set("dismissed", "1");
+  const str = p.toString();
+  return str ? `?${str}` : "";
+}
+
 export default function JobFeed() {
   const { profiles, profileId, setProfileId, profileSlug, loading: profileLoading } = useProfile();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
   const [jobs, setJobs] = useState<Job[]>([]);
   const [savedJobIds, setSavedJobIds] = useState<Set<string>>(new Set());
   const [watchlistCompanies, setWatchlistCompanies] = useState<WatchlistCompany[]>([]);
   const [searchConfig, setSearchConfig] = useState<SearchConfig | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Filter state
-  const [search, setSearch] = useState("");
-  const [location, setLocation] = useState("");
-  const [source, setSource] = useState("");
-  const [dateRange, setDateRange] = useState("");
-  const [minSalary, setMinSalary] = useState(0);
-  const [minSeniority, setMinSeniority] = useState(1);
-  const [remoteOnly, setRemoteOnly] = useState(false);
-  const [showDismissed, setShowDismissed] = useState(false);
+  // Initialize filters from URL params
+  const [filters, setFilters] = useState<FilterState>(() =>
+    parseFiltersFromParams(searchParams)
+  );
+
+  // Sync filters to URL
+  const updateFilters = useCallback(
+    (newFilters: FilterState) => {
+      setFilters(newFilters);
+      const paramStr = serializeFiltersToParams(newFilters);
+      router.replace(`/feed${paramStr}`, { scroll: false });
+    },
+    [router]
+  );
 
   useEffect(() => {
     fetchJobs();
@@ -39,7 +81,7 @@ export default function JobFeed() {
   async function fetchJobs() {
     const supabase = createClient();
     const [jobsRes, appsRes] = await Promise.all([
-      supabase.from("jobs").select("*").gt("seniority_score", 0).order("seniority_score", { ascending: false }).order("salary_max", { ascending: false, nullsFirst: false }),
+      supabase.from("jobs").select("*").gt("seniority_score", 0),
       supabase.from("applications").select("job_id"),
     ]);
     if (jobsRes.data) setJobs(jobsRes.data as Job[]);
@@ -61,13 +103,11 @@ export default function JobFeed() {
     setSearchConfig(cfgRes.data?.[0] ?? null);
   }
 
-  // Watchlist company names (lowercased for matching)
   const watchlistNames = useMemo(
     () => new Set(watchlistCompanies.map((c) => c.name.toLowerCase())),
     [watchlistCompanies]
   );
 
-  // Keywords from search config
   const titleKeywords = useMemo(
     () => (searchConfig?.title_keywords ?? []).map((k) => k.toLowerCase()),
     [searchConfig]
@@ -80,59 +120,49 @@ export default function JobFeed() {
   const descriptionMatchMode = searchConfig?.description_match_mode ?? "OR";
   const crossMatchMode = searchConfig?.cross_match_mode ?? "AND";
 
-  // Derive unique locations and sources for filter dropdowns
-  const locations = useMemo(
+  // Derive unique values for filter dropdowns (from watchlist-filtered jobs)
+  const allLocations = useMemo(
     () => Array.from(new Set(jobs.map((j) => j.location).filter(Boolean) as string[])).sort(),
     [jobs]
   );
-  const sources = useMemo(
-    () => Array.from(new Set(jobs.map((j) => j.source).filter(Boolean) as string[])).sort(),
+  const allCompanies = useMemo(
+    () => Array.from(new Set(jobs.map((j) => j.company).filter(Boolean) as string[])).sort(),
     [jobs]
   );
 
   const hasWatchlist = watchlistCompanies.length > 0;
 
-  // Client-side filtering with boolean logic
-  const filteredJobs = useMemo(() => {
+  // Total count (before user filters, but after watchlist + keyword config)
+  const watchlistFilteredJobs = useMemo(() => {
     if (!hasWatchlist) return [];
-
-    const result = jobs.filter((job) => {
-      // Filter by watchlist companies
+    return jobs.filter((job) => {
       if (!job.company || !watchlistNames.has(job.company.toLowerCase())) return false;
 
-      // Exclude keywords always block
+      // Exclude keywords
       if (job.title) {
-        const titleLower = job.title.toLowerCase();
         const excludes = searchConfig?.exclude_keywords ?? [];
+        const titleLower = job.title.toLowerCase();
         if (excludes.some((kw) => titleLower.includes(kw.toLowerCase()))) return false;
       }
 
-      if (!showDismissed && job.is_dismissed) return false;
-      if ((job.seniority_score ?? 0) < minSeniority) return false;
-
-      // Boolean keyword matching
+      // Config keyword matching
       const hasTitleKw = titleKeywords.length > 0;
       const hasDescKw = descriptionKeywords.length > 0;
-
       if (hasTitleKw || hasDescKw) {
         const titleMatch = !hasTitleKw || (() => {
           if (!job.title) return false;
           const lower = job.title.toLowerCase();
-          if (titleMatchMode === "AND") {
-            return titleKeywords.every((kw) => lower.includes(kw));
-          }
-          return titleKeywords.some((kw) => lower.includes(kw));
+          return titleMatchMode === "AND"
+            ? titleKeywords.every((kw) => lower.includes(kw))
+            : titleKeywords.some((kw) => lower.includes(kw));
         })();
-
         const descMatch = !hasDescKw || (() => {
           if (!job.description) return false;
           const lower = job.description.toLowerCase();
-          if (descriptionMatchMode === "AND") {
-            return descriptionKeywords.every((kw) => lower.includes(kw));
-          }
-          return descriptionKeywords.some((kw) => lower.includes(kw));
+          return descriptionMatchMode === "AND"
+            ? descriptionKeywords.every((kw) => lower.includes(kw))
+            : descriptionKeywords.some((kw) => lower.includes(kw));
         })();
-
         if (crossMatchMode === "AND") {
           if (!titleMatch || !descMatch) return false;
         } else {
@@ -140,8 +170,19 @@ export default function JobFeed() {
         }
       }
 
-      if (search) {
-        const q = search.toLowerCase();
+      return true;
+    });
+  }, [jobs, hasWatchlist, watchlistNames, titleKeywords, descriptionKeywords, titleMatchMode, descriptionMatchMode, crossMatchMode, searchConfig]);
+
+  // Apply user filters
+  const filteredJobs = useMemo(() => {
+    const f = filters;
+    const result = watchlistFilteredJobs.filter((job) => {
+      if (!f.showDismissed && job.is_dismissed) return false;
+      if ((job.seniority_score ?? 0) < f.minSeniority) return false;
+
+      if (f.search) {
+        const q = f.search.toLowerCase();
         const match =
           job.title?.toLowerCase().includes(q) ||
           job.company?.toLowerCase().includes(q) ||
@@ -149,41 +190,75 @@ export default function JobFeed() {
         if (!match) return false;
       }
 
-      if (location && job.location !== location) return false;
-      if (source && job.source !== source) return false;
-      if (minSalary > 0) {
-        const salaryVal = job.salary_max ?? job.salary_min ?? 0;
-        if (salaryVal < minSalary * 1000) return false;
+      // Location multi-select
+      if (f.locations.length > 0) {
+        if (!job.location || !f.locations.some((loc) => job.location === loc)) return false;
       }
-      if (remoteOnly && !job.is_remote) return false;
 
-      if (dateRange && job.date_posted) {
+      // Company multi-select
+      if (f.companies.length > 0) {
+        if (!job.company || !f.companies.includes(job.company)) return false;
+      }
+
+      // Salary
+      if (f.minSalary > 0) {
+        const salaryVal = job.salary_max ?? job.salary_min ?? 0;
+        if (salaryVal < f.minSalary * 1000) return false;
+      }
+      if (f.maxSalary > 0) {
+        const salaryVal = job.salary_min ?? job.salary_max ?? 0;
+        if (salaryVal > f.maxSalary * 1000) return false;
+      }
+      if (f.hideNoSalary) {
+        if (!job.salary_min && !job.salary_max) return false;
+      }
+
+      if (f.remoteOnly && !job.is_remote) return false;
+
+      if (f.dateRange && job.date_posted) {
         const daysAgo = Math.floor(
           (Date.now() - new Date(job.date_posted).getTime()) / (1000 * 60 * 60 * 24)
         );
-        if (daysAgo > Number(dateRange)) return false;
+        if (daysAgo > Number(f.dateRange)) return false;
       }
 
       return true;
     });
 
+    // Sort
     result.sort((a, b) => {
-      const senDiff = (b.seniority_score ?? 0) - (a.seniority_score ?? 0);
-      if (senDiff !== 0) return senDiff;
-      const salA = a.salary_max ?? a.salary_min ?? 0;
-      const salB = b.salary_max ?? b.salary_min ?? 0;
-      return salB - salA;
+      switch (f.sortBy) {
+        case "date": {
+          const da = a.date_posted ? new Date(a.date_posted).getTime() : 0;
+          const db = b.date_posted ? new Date(b.date_posted).getTime() : 0;
+          return db - da;
+        }
+        case "salary": {
+          const sa = a.salary_max ?? a.salary_min ?? 0;
+          const sb = b.salary_max ?? b.salary_min ?? 0;
+          return sb - sa;
+        }
+        case "seniority":
+          return (b.seniority_score ?? 0) - (a.seniority_score ?? 0);
+        case "company":
+          return (a.company ?? "").localeCompare(b.company ?? "");
+        case "relevance": {
+          const scoreA = (a.seniority_score ?? 0) * 10000 + (a.salary_max ?? a.salary_min ?? 0);
+          const scoreB = (b.seniority_score ?? 0) * 10000 + (b.salary_max ?? b.salary_min ?? 0);
+          return scoreB - scoreA;
+        }
+        default:
+          return 0;
+      }
     });
 
     return result;
-  }, [jobs, hasWatchlist, watchlistNames, titleKeywords, descriptionKeywords, titleMatchMode, descriptionMatchMode, crossMatchMode, searchConfig, search, location, source, dateRange, minSalary, minSeniority, remoteOnly, showDismissed]);
+  }, [watchlistFilteredJobs, filters]);
 
-  // Compute matched keywords for each job (for highlighting)
   const jobMatchedKeywords = useMemo(() => {
     const map = new Map<string, { title: string[]; description: string[] }>();
     const allTitleKw = searchConfig?.title_keywords ?? [];
     const allDescKw = searchConfig?.description_keywords ?? [];
-
     for (const job of filteredJobs) {
       map.set(job.id, {
         title: getMatchedKeywords(job.title ?? "", allTitleKw),
@@ -214,7 +289,7 @@ export default function JobFeed() {
 
   if (loading || profileLoading) {
     return (
-      <div className="max-w-4xl mx-auto py-8 px-6">
+      <div className="max-w-5xl mx-auto py-8 px-6">
         <p className="text-gray-500 text-center py-16">Loading jobs...</p>
       </div>
     );
@@ -224,42 +299,29 @@ export default function JobFeed() {
   const hasDescKw = descriptionKeywords.length > 0;
 
   return (
-    <div className="max-w-4xl mx-auto py-6 px-6">
+    <div className="max-w-5xl mx-auto py-6 px-6">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-bold text-gray-900">Job Feed</h1>
-        <div className="flex items-center gap-3">
-          <ProfileSwitcher
-            profiles={profiles}
-            activeProfileId={profileId}
-            onSwitch={setProfileId}
-          />
-          <span className="text-sm text-gray-500">{filteredJobs.length} jobs</span>
-        </div>
+        <ProfileSwitcher
+          profiles={profiles}
+          activeProfileId={profileId}
+          onSwitch={setProfileId}
+        />
       </div>
+
       <FilterBar
-        search={search}
-        onSearchChange={setSearch}
-        location={location}
-        onLocationChange={setLocation}
-        source={source}
-        onSourceChange={setSource}
-        dateRange={dateRange}
-        onDateRangeChange={setDateRange}
-        minSalary={minSalary}
-        onMinSalaryChange={setMinSalary}
-        minSeniority={minSeniority}
-        onMinSeniorityChange={setMinSeniority}
-        remoteOnly={remoteOnly}
-        onRemoteOnlyChange={setRemoteOnly}
-        showDismissed={showDismissed}
-        onShowDismissedChange={setShowDismissed}
-        locations={locations}
-        sources={sources}
+        filters={filters}
+        onChange={updateFilters}
+        allLocations={allLocations}
+        allCompanies={allCompanies}
+        totalCount={watchlistFilteredJobs.length}
+        filteredCount={filteredJobs.length}
       />
-      {/* Filter logic indicator */}
+
+      {/* Keyword config indicator */}
       {(hasTitleKw || hasDescKw) && (
         <div className="bg-blue-50 border border-blue-200 rounded-md px-3 py-2 mb-4 text-xs text-blue-700 flex flex-wrap items-center gap-1">
-          <span className="font-medium">Filter:</span>
+          <span className="font-medium">Config:</span>
           {hasTitleKw && (
             <span>
               Title matches {titleMatchMode === "OR" ? "any" : "all"} of{" "}
@@ -287,6 +349,7 @@ export default function JobFeed() {
           )}
         </div>
       )}
+
       {!hasWatchlist ? (
         <div className="text-center py-16">
           <p className="text-gray-500">No companies in your watchlist yet.</p>

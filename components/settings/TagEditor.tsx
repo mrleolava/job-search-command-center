@@ -7,9 +7,10 @@ interface TagEditorProps {
   tags: string[];
   onAdd: (tag: string) => void;
   onRemove: (tag: string) => void;
+  placeholder?: string;
 }
 
-export default function TagEditor({ label, tags, onAdd, onRemove }: TagEditorProps) {
+export default function TagEditor({ label, tags, onAdd, onRemove, placeholder }: TagEditorProps) {
   const [input, setInput] = useState("");
 
   function handleAdd() {
@@ -45,7 +46,7 @@ export default function TagEditor({ label, tags, onAdd, onRemove }: TagEditorPro
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleAdd())}
-          placeholder={`Add ${label.toLowerCase()}...`}
+          placeholder={placeholder ?? `Add ${label.toLowerCase()}...`}
           className="border border-gray-300 rounded-md px-3 py-1.5 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
         />
         <button

@@ -75,7 +75,7 @@ export default function SettingsPage() {
     fetchData();
   }, [fetchData]);
 
-  async function updateConfigField(field: string, value: string[] | string) {
+  async function updateConfigField(field: string, value: string[] | string | boolean) {
     if (!config) return;
     const { error } = await supabase
       .from("search_configs")
@@ -216,12 +216,41 @@ export default function SettingsPage() {
               onAdd={handleAddTag("exclude_keywords")}
               onRemove={handleRemoveTag("exclude_keywords")}
             />
-            <TagEditor
-              label="Locations"
-              tags={config.locations ?? []}
-              onAdd={handleAddTag("locations")}
-              onRemove={handleRemoveTag("locations")}
-            />
+
+            {/* Geography Filter */}
+            <div>
+              <label className="text-sm font-medium text-gray-700 block mb-1.5">Geography</label>
+              <div className="flex gap-4 mb-3">
+                <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={config.include_remote ?? true}
+                    onChange={(e) => updateConfigField("include_remote", e.target.checked)}
+                    className="rounded accent-gray-900"
+                  />
+                  Remote
+                </label>
+                <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={config.include_hybrid ?? true}
+                    onChange={(e) => updateConfigField("include_hybrid", e.target.checked)}
+                    className="rounded accent-gray-900"
+                  />
+                  Hybrid
+                </label>
+              </div>
+              <p className="text-xs text-gray-400 mb-2">
+                Add cities or states to filter jobs by location during scraping
+              </p>
+              <TagEditor
+                label=""
+                tags={config.locations ?? []}
+                onAdd={handleAddTag("locations")}
+                onRemove={handleRemoveTag("locations")}
+                placeholder="Add city or state..."
+              />
+            </div>
           </div>
         ) : (
           <p className="text-sm text-gray-500">No search config found for this profile.</p>

@@ -99,4 +99,6 @@ export interface SearchConfig {
   title_match_mode: MatchMode;
   description_match_mode: MatchMode;
   cross_match_mode: MatchMode;
+  include_remote: boolean;
+  include_hybrid: boolean;
 }

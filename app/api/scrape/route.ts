@@ -60,6 +60,8 @@ export async function POST(request: Request) {
     const titleKeywords: string[] = config.title_keywords ?? [];
     const excludeKeywords: string[] = config.exclude_keywords ?? [];
     const locations: string[] = config.locations ?? [];
+    const includeRemote: boolean = config.include_remote ?? true;
+    const includeHybrid: boolean = config.include_hybrid ?? true;
     const descriptionKeywords: string[] = config.description_keywords ?? [];
     const titleMatchMode = config.title_match_mode ?? "OR";
     const descriptionMatchMode = config.description_match_mode ?? "OR";
@@ -89,7 +91,7 @@ export async function POST(request: Request) {
     const filtered = allRaw.filter((job) => {
       // Exclude keywords always block
       if (matchesExcludes(job.title, excludeKeywords)) return false;
-      if (!matchesLocation(job.location, job.is_remote, locations)) return false;
+      if (!matchesLocation(job.location, job.is_remote, locations, includeRemote, includeHybrid)) return false;
 
       const hasTitleKw = titleKeywords.length > 0;
       const hasDescKw = descriptionKeywords.length > 0;

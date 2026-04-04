@@ -187,11 +187,22 @@ export function matchesExcludes(title: string, excludes: string[]): boolean {
 export function matchesLocation(
   location: string | null,
   isRemote: boolean,
-  locationFilters: string[]
+  locationFilters: string[],
+  includeRemote: boolean = true,
+  includeHybrid: boolean = true
 ): boolean {
-  if (!locationFilters.length) return true;
   const locLower = (location ?? "").toLowerCase();
-  if (isRemote || locLower.includes("remote")) return true;
+  const isHybrid = locLower.includes("hybrid");
+  const isJobRemote = isRemote || locLower.includes("remote");
+
+  // If remote and config says include remote, pass
+  if (isJobRemote && includeRemote) return true;
+  // If hybrid and config says include hybrid, pass
+  if (isHybrid && includeHybrid) return true;
+
+  // If no location filters, accept all non-remote/hybrid jobs too
+  if (!locationFilters.length) return true;
+
   return locationFilters.some((loc) => locLower.includes(loc.toLowerCase()));
 }
 
