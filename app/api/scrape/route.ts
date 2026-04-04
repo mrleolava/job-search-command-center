@@ -1,12 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import { execFile } from "child_process";
-import { promisify } from "util";
-import path from "path";
 import {
   fetchGreenhouseJobs,
   fetchLeverJobs,
   fetchAshbyJobs,
+  fetchAdzunaJobs,
   matchesKeywords,
   matchesExcludes,
   matchesLocation,
@@ -16,54 +14,10 @@ import {
 import { computeSeniorityScore } from "@/lib/utils";
 import { PROFILE_ID } from "@/lib/profile";
 
-const execFileAsync = promisify(execFile);
-
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
-
-// Path to Python venv — falls back to system python3
-const PYTHON_BIN = process.env.JOBSPY_PYTHON ?? path.join(process.cwd(), ".venv", "bin", "python3.12");
-const JOBSPY_SCRIPT = path.join(process.cwd(), "scripts", "jobspy_search.py");
-
-async function fetchJobSpyJobs(
-  titleKeywords: string[],
-  descriptionKeywords: string[],
-  excludeKeywords: string[],
-  locations: string[],
-  includeRemote: boolean
-): Promise<RawJob[]> {
-  const keywords = [...titleKeywords, ...descriptionKeywords].filter(Boolean);
-  if (keywords.length === 0) return [];
-
-  const args = [
-    JOBSPY_SCRIPT,
-    "--keywords", keywords.join(","),
-    "--results", "100",
-  ];
-  if (locations.length > 0) {
-    args.push("--locations", locations.join(","));
-  }
-  if (includeRemote) {
-    args.push("--include-remote");
-  }
-  if (excludeKeywords.length > 0) {
-    args.push("--exclude", excludeKeywords.join(","));
-  }
-
-  const { stdout, stderr } = await execFileAsync(PYTHON_BIN, args, {
-    timeout: 120000,
-    maxBuffer: 10 * 1024 * 1024,
-  });
-
-  if (stderr) {
-    console.error("[jobspy] stderr:", stderr);
-  }
-
-  const jobs: RawJob[] = JSON.parse(stdout);
-  return jobs;
-}
 
 export async function POST(request: Request) {
   try {
@@ -100,7 +54,6 @@ export async function POST(request: Request) {
     if (companySearchEnabled) {
       // ---- COMPANY MODE: Scrape watchlist companies via APIs ----
 
-      // Load companies for this profile (optionally filtered)
       let companiesQuery = supabase
         .from("watchlist_companies")
         .select("*")
@@ -135,45 +88,60 @@ export async function POST(request: Request) {
         allRaw.push(...jobs);
       }
     } else {
-      // ---- KEYWORD MODE: Use JobSpy to search across all companies ----
+      // ---- KEYWORD MODE: Search via Adzuna API (works on Vercel) ----
       try {
-        allRaw = await fetchJobSpyJobs(
+        allRaw = await fetchAdzunaJobs(
           titleKeywords,
           descriptionKeywords,
-          excludeKeywords,
           locations,
-          includeRemote
+          includeRemote,
+          100
         );
       } catch (err) {
-        const msg = err instanceof Error ? err.message : "JobSpy error";
-        console.error("[jobspy] Failed:", msg);
+        const msg = err instanceof Error ? err.message : "Adzuna error";
+        console.error("[adzuna] Failed:", msg);
         return NextResponse.json(
-          { error: `JobSpy search failed: ${msg}. Make sure python-jobspy is installed in .venv/` },
+          { error: `Keyword search failed: ${msg}` },
           { status: 500 }
         );
       }
     }
 
-    // Filter with boolean logic (for company mode; JobSpy already handles keywords/excludes)
-    const filtered = companySearchEnabled
-      ? allRaw.filter((job) => {
-          if (matchesExcludes(job.title, excludeKeywords)) return false;
-          if (!matchesLocation(job.location, job.is_remote, locations, includeRemote, includeHybrid)) return false;
+    // Filter with boolean logic
+    const filtered = allRaw.filter((job) => {
+      if (matchesExcludes(job.title, excludeKeywords)) return false;
+      if (
+        !matchesLocation(
+          job.location,
+          job.is_remote,
+          locations,
+          includeRemote,
+          includeHybrid
+        )
+      )
+        return false;
 
-          const hasTitleKw = titleKeywords.length > 0;
-          const hasDescKw = descriptionKeywords.length > 0;
+      const hasTitleKw = titleKeywords.length > 0;
+      const hasDescKw = descriptionKeywords.length > 0;
 
-          if (!hasTitleKw && !hasDescKw) return true;
+      if (!hasTitleKw && !hasDescKw) return true;
 
-          const titleMatch = !hasTitleKw || matchesKeywords(job.title, titleKeywords, titleMatchMode);
-          const descMatch = !hasDescKw || matchesKeywords(job.description ?? "", descriptionKeywords, descriptionMatchMode);
+      const titleMatch =
+        !hasTitleKw ||
+        matchesKeywords(job.title, titleKeywords, titleMatchMode);
+      const descMatch =
+        !hasDescKw ||
+        matchesKeywords(
+          job.description ?? "",
+          descriptionKeywords,
+          descriptionMatchMode
+        );
 
-          if (crossMatchMode === "AND") {
-            return titleMatch && descMatch;
-          }
-          return titleMatch || descMatch;
-        })
-      : allRaw; // JobSpy results are already keyword-filtered
+      if (crossMatchMode === "AND") {
+        return titleMatch && descMatch;
+      }
+      return titleMatch || descMatch;
+    });
 
     // Score seniority and remove entry-level
     const scored = filtered.map((j) => ({
@@ -198,7 +166,9 @@ export async function POST(request: Request) {
       .from("jobs")
       .select("url")
       .in("url", urls);
-    const existingUrls = new Set((existing ?? []).map((r: { url: string }) => r.url));
+    const existingUrls = new Set(
+      (existing ?? []).map((r: { url: string }) => r.url)
+    );
     const newJobs = senior.filter((j) => !existingUrls.has(j.url));
 
     // Update salary for existing jobs that now have data

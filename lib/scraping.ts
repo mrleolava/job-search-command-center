@@ -162,6 +162,86 @@ export async function fetchLeverJobs(
   }
 }
 
+// ---------- Adzuna keyword search ----------
+
+export async function fetchAdzunaJobs(
+  titleKeywords: string[],
+  descriptionKeywords: string[],
+  locations: string[],
+  includeRemote: boolean,
+  maxResults: number = 100
+): Promise<RawJob[]> {
+  const appId = process.env.ADZUNA_APP_ID;
+  const appKey = process.env.ADZUNA_APP_KEY;
+  if (!appId || !appKey) {
+    throw new Error(
+      "ADZUNA_APP_ID and ADZUNA_APP_KEY env vars are required for keyword search mode"
+    );
+  }
+
+  const keywords = [...titleKeywords, ...descriptionKeywords].filter(Boolean);
+  if (keywords.length === 0) return [];
+
+  const query = keywords.join(" ");
+  const where = locations.length > 0 ? locations[0] : "";
+  const perPage = Math.min(maxResults, 50);
+  const pages = Math.ceil(maxResults / perPage);
+
+  const allJobs: RawJob[] = [];
+
+  for (let page = 1; page <= pages; page++) {
+    const params = new URLSearchParams({
+      app_id: appId,
+      app_key: appKey,
+      what: query,
+      results_per_page: String(perPage),
+      sort_by: "date",
+      max_days_old: "14",
+    });
+    if (where) params.set("where", where);
+
+    const url = `https://api.adzuna.com/v1/api/jobs/us/search/${page}?${params}`;
+
+    try {
+      const res = await fetch(url);
+      if (!res.ok) {
+        console.error(`[adzuna] page ${page} failed: ${res.status} ${res.statusText}`);
+        break;
+      }
+      const data = await res.json();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const jobs: RawJob[] = (data.results ?? []).map((j: any) => {
+        const location = j.location?.display_name ?? null;
+        const isRemote =
+          (location ?? "").toLowerCase().includes("remote") ||
+          (j.title ?? "").toLowerCase().includes("remote") ||
+          (j.description ?? "").toLowerCase().includes("remote");
+        return {
+          company: j.company?.display_name ?? "Unknown",
+          title: j.title ?? "",
+          url: j.redirect_url ?? "",
+          location,
+          date_posted: j.created ?? null,
+          source: "adzuna",
+          is_remote: isRemote,
+          salary_min: j.salary_min ? Math.round(j.salary_min) : null,
+          salary_max: j.salary_max ? Math.round(j.salary_max) : null,
+          description: j.description ?? null,
+        };
+      });
+
+      allJobs.push(...jobs);
+
+      if ((data.results ?? []).length < perPage) break;
+    } catch (err) {
+      console.error(`[adzuna] Error fetching page ${page}:`, err);
+      break;
+    }
+  }
+
+  return allJobs;
+}
+
 // ---------- Filtering ----------
 
 import { MatchMode } from "./types";
