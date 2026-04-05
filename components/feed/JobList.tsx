@@ -23,7 +23,7 @@ export default function JobList({ jobs, savedJobIds, onSave, onDismiss, matchedK
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {jobs.map((job) => (
         <JobCard
           key={job.id}

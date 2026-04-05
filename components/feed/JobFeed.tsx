@@ -365,22 +365,22 @@ export default function JobFeed() {
     );
   }
 
-  const hasTitleKw = titleKeywords.length > 0;
-  const hasDescKw = descriptionKeywords.length > 0;
-
   return (
-    <div className="max-w-4xl mx-auto py-6 px-6">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <h1 className="text-xl font-bold text-claude-primary">Job Feed</h1>
-          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-            companySearchEnabled
-              ? "bg-claude-accent-light text-claude-accent"
-              : "bg-violet-100 text-violet-700"
-          }`}>
-            {companySearchEnabled ? "Company Search" : "Keyword Search"}
+    <div className="max-w-4xl mx-auto py-4 px-6">
+      <div className="flex items-center gap-2 mb-2">
+        <h1 className="text-base font-semibold text-claude-primary">
+          Job Feed
+          <span className="text-claude-tertiary font-normal ml-1.5">
+            &middot; {filteredJobs.length} results
           </span>
-        </div>
+        </h1>
+        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
+          companySearchEnabled
+            ? "bg-claude-accent-light text-claude-accent"
+            : "bg-violet-100 text-violet-700"
+        }`}>
+          {companySearchEnabled ? "Company" : "Keyword"}
+        </span>
       </div>
 
       <FilterBar
@@ -391,38 +391,6 @@ export default function JobFeed() {
         totalCount={configFilteredJobs.length}
         filteredCount={filteredJobs.length}
       />
-
-      {/* Keyword config indicator */}
-      {(hasTitleKw || hasDescKw) && (
-        <div className="bg-claude-accent-light border border-claude-border rounded-xl px-3 py-2 mb-4 text-xs text-claude-accent flex flex-wrap items-center gap-1">
-          <span className="font-medium">Config:</span>
-          {hasTitleKw && (
-            <span>
-              Title matches {titleMatchMode === "OR" ? "any" : "all"} of{" "}
-              {(searchConfig?.title_keywords ?? []).map((kw, i) => (
-                <span key={kw}>
-                  {i > 0 && <span className="text-claude-tertiary"> {titleMatchMode === "OR" ? "or" : "&"} </span>}
-                  <span className="font-medium">&ldquo;{kw}&rdquo;</span>
-                </span>
-              ))}
-            </span>
-          )}
-          {hasTitleKw && hasDescKw && (
-            <span className="font-bold text-claude-accent mx-1">{crossMatchMode}</span>
-          )}
-          {hasDescKw && (
-            <span>
-              Description matches {descriptionMatchMode === "OR" ? "any" : "all"} of{" "}
-              {(searchConfig?.description_keywords ?? []).map((kw, i) => (
-                <span key={kw}>
-                  {i > 0 && <span className="text-claude-tertiary"> {descriptionMatchMode === "OR" ? "or" : "&"} </span>}
-                  <span className="font-medium">&ldquo;{kw}&rdquo;</span>
-                </span>
-              ))}
-            </span>
-          )}
-        </div>
-      )}
 
       {companySearchEnabled && !hasWatchlist ? (
         <div className="text-center py-16">
