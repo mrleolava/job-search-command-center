@@ -216,12 +216,38 @@ export default function JobFeed() {
         return true;
       });
     } else {
+      // KEYWORD MODE: apply exclude keywords AND title/description keyword matching
       const excludes = (searchConfig?.exclude_keywords ?? []).map((k) => k.toLowerCase());
       return jobs.filter((job) => {
         if (job.title && excludes.length > 0) {
           const titleLower = job.title.toLowerCase();
           if (excludes.some((kw) => titleLower.includes(kw))) return false;
         }
+
+        const hasTitleKw = titleKeywords.length > 0;
+        const hasDescKw = descriptionKeywords.length > 0;
+        if (hasTitleKw || hasDescKw) {
+          const titleMatch = !hasTitleKw || (() => {
+            if (!job.title) return false;
+            const lower = job.title.toLowerCase();
+            return titleMatchMode === "AND"
+              ? titleKeywords.every((kw) => lower.includes(kw))
+              : titleKeywords.some((kw) => lower.includes(kw));
+          })();
+          const descMatch = !hasDescKw || (() => {
+            if (!job.description) return false;
+            const lower = job.description.toLowerCase();
+            return descriptionMatchMode === "AND"
+              ? descriptionKeywords.every((kw) => lower.includes(kw))
+              : descriptionKeywords.some((kw) => lower.includes(kw));
+          })();
+          if (crossMatchMode === "AND") {
+            if (!titleMatch || !descMatch) return false;
+          } else {
+            if (!titleMatch && !descMatch) return false;
+          }
+        }
+
         return true;
       });
     }
