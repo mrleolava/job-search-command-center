@@ -7,6 +7,14 @@ import { computeCompanyFitScore } from "@/lib/utils";
 
 type SlugStatus = "idle" | "checking" | "valid" | "invalid";
 
+const ENRICHABLE_FIELDS = new Set([
+  "funding_stage", "total_raised", "total_employees", "employee_growth_6m",
+  "revenue_stage", "key_investors", "pe_revenue_exposure",
+  "glassdoor_rating", "glassdoor_url", "last_funding_date", "last_funding_amount",
+  "headquarters", "year_founded", "ceo_name", "cro_name",
+  "linkedin_url", "competitors", "tech_stack", "recent_news",
+]);
+
 interface CompanyDetailEditorProps {
   company: WatchlistCompany;
   onUpdate: (updated: WatchlistCompany) => void;
@@ -25,14 +33,25 @@ export default function CompanyDetailEditor({ company, onUpdate, onCancel }: Com
 
   const saveField = useCallback(async (field: string, value: string | number | null) => {
     const updated = { ...co, [field]: value };
+    const updatePayload: Record<string, unknown> = { [field]: value };
+
+    // Track manually edited enrichable fields
+    if (ENRICHABLE_FIELDS.has(field)) {
+      const manualFields = new Set(co.manually_edited_fields ?? []);
+      manualFields.add(field);
+      const manualArr = Array.from(manualFields);
+      updated.manually_edited_fields = manualArr;
+      updatePayload.manually_edited_fields = manualArr;
+    }
+
     // Recompute fit score on relevant field changes
     const fitFields = ["pe_revenue_exposure", "employee_growth_6m", "glassdoor_rating", "revenue_stage", "last_funding_date", "cro_name", "key_investors"];
     if (fitFields.includes(field)) {
       updated.company_fit_score = computeCompanyFitScore(updated);
-      await supabase.from("watchlist_companies").update({ [field]: value, company_fit_score: updated.company_fit_score }).eq("id", co.id);
-    } else {
-      await supabase.from("watchlist_companies").update({ [field]: value }).eq("id", co.id);
+      updatePayload.company_fit_score = updated.company_fit_score;
     }
+
+    await supabase.from("watchlist_companies").update(updatePayload).eq("id", co.id);
     setCo(updated);
     onUpdate(updated);
     setLastSaved(field);

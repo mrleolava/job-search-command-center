@@ -106,6 +106,7 @@ export interface WatchlistCompany {
   competitors: string | null;
   tech_stack: string | null;
   company_fit_score: number | null;
+  manually_edited_fields: string[] | null;
 }
 
 export const FUNDING_STAGES = [

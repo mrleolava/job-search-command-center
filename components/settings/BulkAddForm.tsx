@@ -17,6 +17,9 @@ interface CompanyResult {
   status: "pending" | "processing" | "added" | "skipped" | "failed";
   board: string | null;
   companyId: string | null;
+  enrichStatus?: "pending" | "enriching" | "done" | "skipped";
+  enrichFound?: string[];
+  enrichMissing?: string[];
 }
 
 function parseUrls(input: string): string[] {
@@ -49,6 +52,31 @@ function normalizeUrl(url: string): string {
     .split("/")[0];
 }
 
+const FRIENDLY_FIELD_NAMES: Record<string, string> = {
+  funding_stage: "Funding",
+  total_raised: "Raised",
+  total_employees: "Employees",
+  revenue_stage: "Revenue",
+  key_investors: "Investors",
+  glassdoor_rating: "Glassdoor",
+  glassdoor_url: "Glassdoor URL",
+  headquarters: "HQ",
+  year_founded: "Founded",
+  linkedin_url: "LinkedIn",
+  ceo_name: "CEO",
+  cro_name: "CRO",
+  pe_revenue_exposure: "PE Exposure",
+  last_funding_date: "Last Funding",
+  last_funding_amount: "Last Round",
+  competitors: "Competitors",
+  tech_stack: "Tech",
+  recent_news: "News",
+};
+
+function friendlyFieldName(field: string): string {
+  return FRIENDLY_FIELD_NAMES[field] ?? field;
+}
+
 export default function BulkAddForm({
   existingCompanies,
   onComplete,
@@ -59,6 +87,9 @@ export default function BulkAddForm({
   const [processing, setProcessing] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
+  const [enriching, setEnriching] = useState(false);
+  const [enrichIndex, setEnrichIndex] = useState(0);
+  const [enrichTotal, setEnrichTotal] = useState(0);
   const [scraping, setScraping] = useState(false);
   const [scrapeResult, setScrapeResult] = useState<number | null>(null);
   const [done, setDone] = useState(false);
@@ -95,11 +126,11 @@ export default function BulkAddForm({
 
     const newCompanyIds: string[] = [];
 
+    // Phase 1: Detect boards and insert
     for (let i = 0; i < initialResults.length; i++) {
       setCurrentIndex(i + 1);
       const r = { ...initialResults[i] };
 
-      // Check for duplicates
       const domain = normalizeUrl(r.url);
       if (existingNames.has(r.name.toLowerCase()) || existingDomains.has(domain)) {
         r.status = "skipped";
@@ -112,7 +143,6 @@ export default function BulkAddForm({
       initialResults[i] = r;
       setResults([...initialResults]);
 
-      // Detect job board
       try {
         const detectRes = await fetch("/api/detect-boards", {
           method: "POST",
@@ -132,7 +162,6 @@ export default function BulkAddForm({
 
         r.board = boards.length > 0 ? boards[0] : null;
 
-        // Save to DB
         const website = r.url.startsWith("http") ? r.url : `https://${r.url}`;
         const { data: inserted, error } = await supabase
           .from("watchlist_companies")
@@ -155,7 +184,6 @@ export default function BulkAddForm({
           if (r.companyId && (gh || lev || ash)) {
             newCompanyIds.push(r.companyId);
           }
-          // Track the new company so subsequent dupes are caught
           existingNames.add(r.name.toLowerCase());
           existingDomains.add(domain);
         }
@@ -169,7 +197,52 @@ export default function BulkAddForm({
 
     setProcessing(false);
 
-    // Auto-scrape for newly added companies with slugs
+    // Phase 2: Enrich all added companies
+    const addedResults = initialResults.filter(
+      (r) => r.status === "added" && r.companyId
+    );
+    if (addedResults.length > 0) {
+      setEnriching(true);
+      setEnrichTotal(addedResults.length);
+
+      for (let i = 0; i < addedResults.length; i++) {
+        setEnrichIndex(i + 1);
+        const r = addedResults[i];
+        const idx = initialResults.indexOf(r);
+
+        initialResults[idx] = { ...r, enrichStatus: "enriching" };
+        setResults([...initialResults]);
+
+        try {
+          const res = await fetch("/api/enrich-company", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ companyId: r.companyId }),
+          });
+          const enrichData = await res.json();
+
+          initialResults[idx] = {
+            ...initialResults[idx],
+            enrichStatus: "done",
+            enrichFound: enrichData.foundFields ?? [],
+            enrichMissing: enrichData.missing ?? [],
+          };
+        } catch {
+          initialResults[idx] = {
+            ...initialResults[idx],
+            enrichStatus: "done",
+            enrichFound: [],
+            enrichMissing: [],
+          };
+        }
+
+        setResults([...initialResults]);
+      }
+
+      setEnriching(false);
+    }
+
+    // Phase 3: Auto-scrape
     if (newCompanyIds.length > 0) {
       setScraping(true);
       try {
@@ -194,7 +267,7 @@ export default function BulkAddForm({
   const addedCount = results.filter((r) => r.status === "added").length;
   const skippedCount = results.filter((r) => r.status === "skipped").length;
   const failedCount = results.filter((r) => r.status === "failed").length;
-  const isRunning = processing || scraping;
+  const isRunning = processing || enriching || scraping;
 
   return (
     <div className="bg-claude-bg border border-claude-border rounded-xl p-4 space-y-3">
@@ -218,15 +291,15 @@ export default function BulkAddForm({
           {isRunning && (
             <div className="flex items-center gap-2 text-sm text-claude-secondary">
               <Spinner />
-              {processing
-                ? `Processing ${currentIndex} of ${totalCount}...`
-                : "Scraping jobs for new companies..."}
+              {processing && `Detecting boards ${currentIndex} of ${totalCount}...`}
+              {enriching && `Enriching company data ${enrichIndex} of ${enrichTotal}...`}
+              {scraping && "Scraping jobs for new companies..."}
             </div>
           )}
 
           {/* Live results while processing */}
           {results.length > 0 && !done && (
-            <div className="max-h-48 overflow-y-auto space-y-1">
+            <div className="max-h-64 overflow-y-auto space-y-1">
               {results.map((r, i) => (
                 <ResultRow key={i} result={r} />
               ))}
@@ -242,7 +315,7 @@ export default function BulkAddForm({
               {isRunning ? (
                 <span className="flex items-center gap-2">
                   <Spinner />
-                  {processing ? "Processing..." : "Scraping..."}
+                  {processing ? "Detecting..." : enriching ? "Enriching..." : "Scraping..."}
                 </span>
               ) : (
                 "Add Companies"
@@ -293,7 +366,7 @@ export default function BulkAddForm({
           </div>
 
           {/* Result details */}
-          <div className="max-h-48 overflow-y-auto space-y-1">
+          <div className="max-h-64 overflow-y-auto space-y-1">
             {results.map((r, i) => (
               <ResultRow key={i} result={r} />
             ))}
@@ -314,39 +387,66 @@ export default function BulkAddForm({
 
 function ResultRow({ result }: { result: CompanyResult }) {
   return (
-    <div className="flex items-center gap-2 text-sm">
-      {result.status === "pending" && (
-        <span className="text-claude-tertiary w-4 text-center">&middot;</span>
+    <div className="text-sm">
+      <div className="flex items-center gap-2">
+        {result.status === "pending" && (
+          <span className="text-claude-tertiary w-4 text-center">&middot;</span>
+        )}
+        {result.status === "processing" && <Spinner />}
+        {result.status === "added" && (
+          <span className="text-emerald-600 w-4 text-center">&check;</span>
+        )}
+        {result.status === "skipped" && (
+          <span className="text-amber-500 w-4 text-center">&ndash;</span>
+        )}
+        {result.status === "failed" && (
+          <span className="text-red-500 w-4 text-center">&times;</span>
+        )}
+        <span
+          className={
+            result.status === "skipped"
+              ? "text-claude-tertiary"
+              : result.status === "failed"
+              ? "text-red-600"
+              : "text-claude-secondary"
+          }
+        >
+          {result.name}
+        </span>
+        {result.status === "added" && result.board && (
+          <span className="text-xs text-emerald-600">({result.board})</span>
+        )}
+        {result.status === "added" && !result.board && (
+          <span className="text-xs text-claude-tertiary">(no board detected)</span>
+        )}
+        {result.status === "skipped" && (
+          <span className="text-xs text-amber-500">duplicate</span>
+        )}
+        {result.enrichStatus === "enriching" && (
+          <span className="text-xs text-claude-tertiary flex items-center gap-1">
+            <Spinner /> enriching...
+          </span>
+        )}
+      </div>
+      {/* Enrichment results */}
+      {result.enrichStatus === "done" && result.enrichFound && result.enrichFound.length > 0 && (
+        <div className="ml-6 text-xs text-claude-tertiary mt-0.5">
+          <span className="text-emerald-600">Found:</span>{" "}
+          {result.enrichFound.map((f) => friendlyFieldName(f)).join(", ")}
+          {result.enrichMissing && result.enrichMissing.length > 0 && (
+            <span className="ml-1">
+              <span className="text-claude-border">|</span>{" "}
+              <span className="text-amber-500">Missing:</span>{" "}
+              {result.enrichMissing.slice(0, 5).map((f) => friendlyFieldName(f)).join(", ")}
+              {result.enrichMissing.length > 5 && ` +${result.enrichMissing.length - 5} more`}
+            </span>
+          )}
+        </div>
       )}
-      {result.status === "processing" && <Spinner />}
-      {result.status === "added" && (
-        <span className="text-emerald-600 w-4 text-center">&check;</span>
-      )}
-      {result.status === "skipped" && (
-        <span className="text-amber-500 w-4 text-center">&ndash;</span>
-      )}
-      {result.status === "failed" && (
-        <span className="text-red-500 w-4 text-center">&times;</span>
-      )}
-      <span
-        className={
-          result.status === "skipped"
-            ? "text-claude-tertiary"
-            : result.status === "failed"
-            ? "text-red-600"
-            : "text-claude-secondary"
-        }
-      >
-        {result.name}
-      </span>
-      {result.status === "added" && result.board && (
-        <span className="text-xs text-emerald-600">({result.board})</span>
-      )}
-      {result.status === "added" && !result.board && (
-        <span className="text-xs text-claude-tertiary">(no board detected)</span>
-      )}
-      {result.status === "skipped" && (
-        <span className="text-xs text-amber-500">duplicate</span>
+      {result.enrichStatus === "done" && result.enrichFound && result.enrichFound.length === 0 && (
+        <div className="ml-6 text-xs text-amber-500 mt-0.5">
+          No data found — add manually in Settings
+        </div>
       )}
     </div>
   );
