@@ -35,6 +35,7 @@ function parseFiltersFromParams(params: URLSearchParams): FilterState {
     minSeniority: Number(params.get("sen")) || 1,
     remoteOnly: params.get("remote") === "1",
     hybridOnly: params.get("hybrid") === "1",
+    activeCompaniesOnly: params.get("activeCo") !== "0",
     showDismissed: params.get("dismissed") === "1",
     peExposure: params.get("pe") ? params.get("pe")!.split("|") : [],
     fundingStages: params.get("fund") ? params.get("fund")!.split("|") : [],
@@ -57,6 +58,7 @@ function serializeFiltersToParams(f: FilterState): string {
   if (f.minSeniority > 1) p.set("sen", String(f.minSeniority));
   if (f.remoteOnly) p.set("remote", "1");
   if (f.hybridOnly) p.set("hybrid", "1");
+  if (!f.activeCompaniesOnly) p.set("activeCo", "0");
   if (f.showDismissed) p.set("dismissed", "1");
   if (f.peExposure.length) p.set("pe", f.peExposure.join("|"));
   if (f.fundingStages.length) p.set("fund", f.fundingStages.join("|"));
@@ -133,6 +135,11 @@ export default function JobFeed() {
 
   const watchlistNames = useMemo(
     () => new Set(watchlistCompanies.map((c) => c.name.toLowerCase())),
+    [watchlistCompanies]
+  );
+
+  const activeWatchlistNames = useMemo(
+    () => new Set(watchlistCompanies.filter((c) => c.is_active).map((c) => c.name.toLowerCase())),
     [watchlistCompanies]
   );
 
@@ -226,6 +233,11 @@ export default function JobFeed() {
     const result = configFilteredJobs.filter((job) => {
       if (!f.showDismissed && job.is_dismissed) return false;
       if ((job.seniority_score ?? 0) < f.minSeniority) return false;
+
+      // Active companies filter
+      if (f.activeCompaniesOnly && companySearchEnabled && job.company) {
+        if (!activeWatchlistNames.has(job.company.toLowerCase())) return false;
+      }
 
       if (f.search) {
         const q = f.search.toLowerCase();
@@ -344,7 +356,7 @@ export default function JobFeed() {
     });
 
     return result;
-  }, [configFilteredJobs, filters, companyIntelMap]);
+  }, [configFilteredJobs, filters, companyIntelMap, activeWatchlistNames, companySearchEnabled]);
 
   const jobMatchedKeywords = useMemo(() => {
     const map = new Map<string, { title: string[]; description: string[] }>();

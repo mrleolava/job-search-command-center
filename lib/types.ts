@@ -86,6 +86,7 @@ export interface WatchlistCompany {
   lever_slug: string | null;
   website: string | null;
   profile_id: string;
+  is_active: boolean;
   funding_stage: string | null;
   total_raised: string | null;
   total_employees: number | null;

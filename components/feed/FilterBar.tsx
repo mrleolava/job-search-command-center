@@ -15,6 +15,7 @@ export interface FilterState {
   minSeniority: number;
   remoteOnly: boolean;
   hybridOnly: boolean;
+  activeCompaniesOnly: boolean;
   showDismissed: boolean;
   peExposure: string[];
   fundingStages: string[];
@@ -170,6 +171,7 @@ export default function FilterBar({
   for (const co of filters.companies) {
     chips.push({ label: co, clear: () => set("companies", filters.companies.filter((c) => c !== co)) });
   }
+  if (!filters.activeCompaniesOnly) chips.push({ label: "All companies", clear: () => set("activeCompaniesOnly", true) });
   if (filters.showDismissed) chips.push({ label: "Dismissed", clear: () => set("showDismissed", false) });
   for (const pe of filters.peExposure) {
     chips.push({ label: `PE: ${pe.split(" ")[0]}`, clear: () => set("peExposure", filters.peExposure.filter((p) => p !== pe)) });
@@ -189,7 +191,7 @@ export default function FilterBar({
     onChange({
       search: "", sortBy: "date", locations: [], companies: [], dateRange: "",
       minSalary: 0, maxSalary: 0, hideNoSalary: false, minSeniority: 1,
-      remoteOnly: false, hybridOnly: false, showDismissed: false,
+      remoteOnly: false, hybridOnly: false, activeCompaniesOnly: true, showDismissed: false,
       peExposure: [], fundingStages: [], revenueStages: [], minGrowth: "", minGlassdoor: "",
     });
   }
@@ -273,6 +275,12 @@ export default function FilterBar({
             className={`${pill} ${filters.hybridOnly ? on : off}`}
           >
             Hybrid
+          </button>
+          <button
+            onClick={() => set("activeCompaniesOnly", !filters.activeCompaniesOnly)}
+            className={`${pill} ${filters.activeCompaniesOnly ? on : off}`}
+          >
+            Active Co.
           </button>
           <Sep />
           {/* Salary */}

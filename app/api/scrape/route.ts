@@ -59,7 +59,8 @@ export async function POST(request: Request) {
       let companiesQuery = supabase
         .from("watchlist_companies")
         .select("*")
-        .eq("profile_id", PROFILE_ID);
+        .eq("profile_id", PROFILE_ID)
+        .eq("is_active", true);
 
       if (companyId) {
         companiesQuery = companiesQuery.eq("id", companyId);

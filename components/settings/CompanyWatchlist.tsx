@@ -97,6 +97,16 @@ export default function CompanyWatchlist({
     onUpdate();
   }
 
+  async function handleToggleActive(id: string, isActive: boolean) {
+    setLocalCompanies((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, is_active: isActive } : c))
+    );
+    await supabase
+      .from("watchlist_companies")
+      .update({ is_active: isActive })
+      .eq("id", id);
+  }
+
   async function handleEnrichOne(companyId: string) {
     setEnrichingId(companyId);
     await enrichCompany(companyId);
@@ -157,13 +167,14 @@ export default function CompanyWatchlist({
   }
 
   const companiesWithData = localCompanies.filter(hasIntelData).length;
+  const activeCount = localCompanies.filter((c) => c.is_active).length;
 
   return (
     <div>
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <h3 className="text-sm font-semibold text-claude-primary">
-            Watchlist Companies ({localCompanies.length})
+            Watchlist Companies ({activeCount} active / {localCompanies.length} total)
           </h3>
           {localCompanies.length > 0 && (
             <span className="text-[10px] text-claude-tertiary">
@@ -244,8 +255,24 @@ export default function CompanyWatchlist({
           ) : (
             <div
               key={co.id}
-              className="flex items-center justify-between bg-white border border-claude-border rounded-xl px-4 py-3"
+              className={`flex items-center justify-between bg-white border border-claude-border rounded-xl px-4 py-3 transition-opacity ${
+                co.is_active ? "" : "opacity-50"
+              }`}
             >
+              {/* Toggle switch */}
+              <button
+                onClick={() => handleToggleActive(co.id, !co.is_active)}
+                className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors mr-3 ${
+                  co.is_active ? "bg-emerald-500" : "bg-claude-border"
+                }`}
+                title={co.is_active ? "Active — click to pause" : "Paused — click to activate"}
+              >
+                <span
+                  className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${
+                    co.is_active ? "translate-x-[18px]" : "translate-x-[3px]"
+                  }`}
+                />
+              </button>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="font-medium text-claude-primary text-sm">{co.name}</span>
