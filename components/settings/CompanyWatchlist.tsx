@@ -12,6 +12,14 @@ interface CompanyWatchlistProps {
   onUpdate: () => void;
 }
 
+function hasIntelData(co: WatchlistCompany): boolean {
+  return !!(
+    co.funding_stage || co.total_raised || co.total_employees ||
+    co.employee_growth_6m || co.revenue_stage || co.pe_revenue_exposure ||
+    co.glassdoor_rating || co.key_investors || co.ceo_name || co.cro_name
+  );
+}
+
 export default function CompanyWatchlist({
   companies,
   onUpdate,
@@ -68,12 +76,21 @@ export default function CompanyWatchlist({
     onUpdate();
   }
 
+  const companiesWithData = localCompanies.filter(hasIntelData).length;
+
   return (
     <div>
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-semibold text-claude-primary">
-          Watchlist Companies ({localCompanies.length})
-        </h3>
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-claude-primary">
+            Watchlist Companies ({localCompanies.length})
+          </h3>
+          {localCompanies.length > 0 && (
+            <span className="text-[10px] text-claude-tertiary">
+              {companiesWithData}/{localCompanies.length} have data
+            </span>
+          )}
+        </div>
         {!showAddForm && (
           <button
             onClick={() => setShowAddForm(true)}
@@ -116,9 +133,19 @@ export default function CompanyWatchlist({
                       {fundingStageBadge(co.funding_stage)!.label}
                     </span>
                   )}
+                  {co.total_employees != null && (
+                    <span className="text-[10px] text-claude-tertiary">
+                      {co.total_employees} emp
+                    </span>
+                  )}
                   {co.company_fit_score != null && co.company_fit_score > 0 && (
                     <span className="text-[10px] font-medium text-claude-accent">
                       Fit: {co.company_fit_score}
+                    </span>
+                  )}
+                  {!hasIntelData(co) && (
+                    <span className="text-[10px] text-amber-500">
+                      {"\u26A0"} No data
                     </span>
                   )}
                 </div>
@@ -126,12 +153,11 @@ export default function CompanyWatchlist({
                   {co.greenhouse_slug && <span>greenhouse: {co.greenhouse_slug}</span>}
                   {co.lever_slug && <span>lever: {co.lever_slug}</span>}
                   {co.ashby_slug && <span>ashby: {co.ashby_slug}</span>}
-                  {co.website && <span>{co.website}</span>}
                   {!co.greenhouse_slug && !co.ashby_slug && !co.lever_slug && (
                     <span className="text-amber-600">No scraper slug</span>
                   )}
-                  {co.total_employees && <span>{co.total_employees} employees</span>}
-                  {co.pe_revenue_exposure && <span>PE: {co.pe_revenue_exposure}</span>}
+                  {co.revenue_stage && <span>{co.revenue_stage}</span>}
+                  {co.pe_revenue_exposure && <span>PE: {co.pe_revenue_exposure.split(" ")[0]}</span>}
                 </div>
               </div>
               <div className="flex gap-1">
