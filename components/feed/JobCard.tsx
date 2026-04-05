@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Job, WatchlistCompany } from "@/lib/types";
 import { timeAgo, formatSalary, applicantColor, seniorityBadge, fundingStageBadge, growthIndicator } from "@/lib/utils";
+import { displayLocation } from "@/lib/locations";
 
 interface JobCardProps {
   job: Job;
@@ -211,7 +212,9 @@ export default function JobCard({ job, onSave, onDismiss, isSaved, matchedKeywor
             )}
           </h3>
           <div className="flex flex-wrap gap-2 mt-2 text-sm text-claude-tertiary">
-            {job.location && <span>{job.location}</span>}
+            {(job.normalized_location || job.location) && (
+              <span>{displayLocation(job.normalized_location, job.location)}</span>
+            )}
             <span className="text-claude-border">&middot;</span>
             <span className={job.salary_min || job.salary_max ? "text-emerald-700 font-medium" : "text-claude-tertiary"}>
               {salary}

@@ -116,36 +116,69 @@ const CITY_MATCHERS: [RegExp, string][] = [
 
 /**
  * Normalizes a raw location string into comma-separated clean city names.
+ * Handles separators like ; | / and deduplicates.
+ *
  * Examples:
- *   "New York City, NY"       → "New York"
- *   "NYC / Remote"            → "New York,Remote"
- *   "San Francisco (Hybrid)"  → "San Francisco"
- *   "Remote - US"             → "Remote"
- *   "NYC, SF, or Remote"      → "New York,Remote,San Francisco"
+ *   "New York City, NY"                       → "New York"
+ *   "NYC / Remote"                            → "New York,Remote"
+ *   "San Francisco (Hybrid)"                  → "San Francisco"
+ *   "Remote - US"                             → "Remote"
+ *   "New York City, NY; San Francisco, CA"    → "New York,San Francisco"
+ *   "NYC | SF | Remote"                       → "New York,Remote,San Francisco"
+ *   "New York City, NY; New York City, NY"    → "New York"
+ *   "Remote-Friendly (Travel Required)"       → "Remote"
  */
 export function normalizeLocation(raw: string | null): string {
   if (!raw || !raw.trim()) return "";
 
-  const lower = raw.toLowerCase().trim();
   const cities = new Set<string>();
 
-  // Detect remote
-  if (
-    /\b(remote|work\s*from\s*(anywhere|home)|fully\s*remote|100%\s*remote|wfh)\b/i.test(
-      lower
-    )
-  ) {
-    cities.add("Remote");
-  }
+  // Split on common separators: ; | / (but not commas — those are city,state)
+  const segments = raw.split(/\s*[;|/]\s*/);
 
-  // Check all matchers against the full string
-  for (const [pattern, cityName] of CITY_MATCHERS) {
-    if (pattern.test(lower)) {
-      cities.add(cityName);
+  for (const segment of segments) {
+    const lower = segment.toLowerCase().trim();
+    if (!lower) continue;
+
+    // Detect remote variants
+    if (
+      /\b(remote|work\s*from\s*(anywhere|home)|fully\s*remote|100%\s*remote|wfh)\b/i.test(
+        lower
+      ) ||
+      /\bremote[-\s]*friendly\b/i.test(lower)
+    ) {
+      cities.add("Remote");
+    }
+
+    // Check city matchers
+    for (const [pattern, cityName] of CITY_MATCHERS) {
+      if (pattern.test(lower)) {
+        cities.add(cityName);
+      }
     }
   }
 
-  // If no match found, clean up and use the raw value
+  // If nothing matched from matchers, try cleanup on the full string
+  if (cities.size === 0) {
+    // Re-check full string for remote
+    if (
+      /\b(remote|work\s*from\s*(anywhere|home)|fully\s*remote|100%\s*remote|wfh|remote[-\s]*friendly)\b/i.test(
+        raw
+      )
+    ) {
+      cities.add("Remote");
+    }
+
+    // Re-check full string against matchers
+    const lower = raw.toLowerCase();
+    for (const [pattern, cityName] of CITY_MATCHERS) {
+      if (pattern.test(lower)) {
+        cities.add(cityName);
+      }
+    }
+  }
+
+  // Still nothing — clean up raw value and use it
   if (cities.size === 0) {
     const cleaned = raw
       .trim()
@@ -158,6 +191,28 @@ export function normalizeLocation(raw: string | null): string {
   }
 
   return Array.from(cities).sort().join(",");
+}
+
+/**
+ * Format normalized_location for display on job cards.
+ * Removes "Remote" (shown as a badge separately) and joins with " · ".
+ * Falls back to running the normalizer on raw location if needed.
+ */
+export function displayLocation(
+  normalizedLocation: string | null,
+  rawLocation: string | null
+): string {
+  let norm = normalizedLocation;
+  if (!norm) {
+    norm = normalizeLocation(rawLocation);
+  }
+  if (!norm) return "";
+
+  const parts = norm
+    .split(",")
+    .filter((c) => c && c !== "Remote");
+
+  return parts.join(" · ");
 }
 
 /**
