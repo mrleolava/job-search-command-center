@@ -8,18 +8,36 @@ interface TagEditorProps {
   onAdd: (tag: string) => void;
   onRemove: (tag: string) => void;
   placeholder?: string;
+  bankKeywords?: string[];
+  onBankClick?: (keyword: string) => void;
+  onSaveToBank?: (keyword: string) => void;
 }
 
-export default function TagEditor({ label, tags, onAdd, onRemove, placeholder }: TagEditorProps) {
+export default function TagEditor({
+  label,
+  tags,
+  onAdd,
+  onRemove,
+  placeholder,
+  bankKeywords,
+  onBankClick,
+  onSaveToBank,
+}: TagEditorProps) {
   const [input, setInput] = useState("");
 
   function handleAdd() {
     const trimmed = input.trim();
     if (trimmed && !tags.includes(trimmed)) {
       onAdd(trimmed);
+      onSaveToBank?.(trimmed);
       setInput("");
     }
   }
+
+  // Bank keywords not currently active
+  const availableBank = (bankKeywords ?? []).filter(
+    (kw) => !tags.some((t) => t.toLowerCase() === kw.toLowerCase())
+  );
 
   return (
     <div>
@@ -46,7 +64,7 @@ export default function TagEditor({ label, tags, onAdd, onRemove, placeholder }:
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleAdd())}
-          placeholder={placeholder ?? `Add ${label.toLowerCase()}...`}
+          placeholder={placeholder ?? `Add ${label.toLowerCase() || "keyword"}...`}
           className="border border-claude-border rounded-lg px-3 py-1.5 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-claude-accent focus:border-transparent"
         />
         <button
@@ -57,6 +75,26 @@ export default function TagEditor({ label, tags, onAdd, onRemove, placeholder }:
           Add
         </button>
       </div>
+
+      {/* Keyword Bank */}
+      {availableBank.length > 0 && onBankClick && (
+        <div className="mt-3 pt-3 border-t border-claude-border">
+          <span className="text-xs text-claude-tertiary block mb-1.5">
+            Keyword Bank (click to add):
+          </span>
+          <div className="flex flex-wrap gap-1.5">
+            {availableBank.map((kw) => (
+              <button
+                key={kw}
+                onClick={() => onBankClick(kw)}
+                className="inline-flex items-center text-xs px-2.5 py-1 rounded-lg border border-dashed border-claude-border text-claude-tertiary hover:border-claude-accent hover:text-claude-accent transition-colors cursor-pointer"
+              >
+                {kw}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

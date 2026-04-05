@@ -125,6 +125,22 @@ export const PE_EXPOSURE_OPTIONS = [
   "Core (>50%)", "Significant (20-50%)", "Emerging (<20%)", "None/Unknown",
 ] as const;
 
+export interface KeywordBankEntry {
+  id: string;
+  keyword: string;
+  keyword_type: "title" | "description" | "exclude";
+  created_at: string;
+}
+
+export interface KeywordPreset {
+  id: string;
+  name: string;
+  title_keywords: string[];
+  description_keywords: string[];
+  exclude_keywords: string[];
+  created_at: string;
+}
+
 export type MatchMode = "AND" | "OR";
 
 export interface SearchConfig {

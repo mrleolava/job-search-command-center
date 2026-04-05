@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase";
-import { WatchlistCompany, SearchConfig, MatchMode } from "@/lib/types";
+import { WatchlistCompany, SearchConfig, MatchMode, KeywordBankEntry, KeywordPreset } from "@/lib/types";
 import { PROFILE_ID } from "@/lib/profile";
 import CompanyWatchlist from "./CompanyWatchlist";
 import TagEditor from "./TagEditor";
+import KeywordPresets from "./KeywordPresets";
 import ScrapeButton from "./ScrapeButton";
 
 function MatchModeToggle({
@@ -57,9 +58,12 @@ export default function SettingsPage() {
   const [config, setConfig] = useState<SearchConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [saveStatus, setSaveStatus] = useState<{ field: string; ok: boolean; msg: string } | null>(null);
+  const [bankKeywords, setBankKeywords] = useState<KeywordBankEntry[]>([]);
+  const [presets, setPresets] = useState<KeywordPreset[]>([]);
+  const [bankSeeded, setBankSeeded] = useState(false);
 
   const fetchData = useCallback(async () => {
-    const [compRes, cfgRes] = await Promise.all([
+    const [compRes, cfgRes, bankRes, presetRes] = await Promise.all([
       supabase
         .from("watchlist_companies")
         .select("*")
@@ -70,17 +74,21 @@ export default function SettingsPage() {
         .select("*")
         .eq("profile_id", PROFILE_ID)
         .limit(1),
+      supabase
+        .from("keyword_bank")
+        .select("*")
+        .order("keyword"),
+      supabase
+        .from("keyword_presets")
+        .select("*")
+        .order("created_at", { ascending: false }),
     ]);
 
     setCompanies(compRes.data ?? []);
     const loadedConfig = cfgRes.data?.[0] ?? null;
-    console.log(`[settings] Loaded config:`, loadedConfig ? {
-      id: loadedConfig.id,
-      title_match_mode: loadedConfig.title_match_mode,
-      description_match_mode: loadedConfig.description_match_mode,
-      cross_match_mode: loadedConfig.cross_match_mode,
-    } : null);
     setConfig(loadedConfig);
+    setBankKeywords(bankRes.data ?? []);
+    setPresets(presetRes.data ?? []);
     setLoading(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -89,42 +97,93 @@ export default function SettingsPage() {
     fetchData();
   }, [fetchData]);
 
-  async function updateConfigField(field: string, value: string[] | string | boolean) {
-    if (!config) {
-      console.error(`[settings] updateConfigField called but config is null`);
-      return;
-    }
-    console.log(`[settings] Updating ${field} =`, JSON.stringify(value), `| config.id =`, config.id);
+  // Seed bank with existing config keywords on first load
+  useEffect(() => {
+    if (bankSeeded || !config || bankKeywords.length > 0) return;
+    setBankSeeded(true);
 
-    // Optimistic update
+    const toSeed: { keyword: string; keyword_type: string }[] = [];
+    for (const kw of config.title_keywords ?? []) {
+      toSeed.push({ keyword: kw, keyword_type: "title" });
+    }
+    for (const kw of config.description_keywords ?? []) {
+      toSeed.push({ keyword: kw, keyword_type: "description" });
+    }
+    for (const kw of config.exclude_keywords ?? []) {
+      toSeed.push({ keyword: kw, keyword_type: "exclude" });
+    }
+
+    if (toSeed.length > 0) {
+      supabase
+        .from("keyword_bank")
+        .upsert(toSeed, { onConflict: "keyword,keyword_type", ignoreDuplicates: true })
+        .then(({ data }) => {
+          if (data) setBankKeywords(data);
+          else fetchData();
+        });
+    }
+  }, [config, bankKeywords, bankSeeded, supabase, fetchData]);
+
+  async function updateConfigField(field: string, value: string[] | string | boolean) {
+    if (!config) return;
+
     const prevConfig = config;
     setConfig({ ...config, [field]: value } as SearchConfig);
 
-    const { data, error, status, statusText } = await supabase
+    const { data, error } = await supabase
       .from("search_configs")
       .update({ [field]: value })
       .eq("id", config.id)
       .select();
 
-    console.log(`[settings] Response for ${field}:`, { status, statusText, error, data });
-
     if (error) {
-      console.error(`[settings] Failed to update ${field}:`, error);
       setConfig(prevConfig);
       setSaveStatus({ field, ok: false, msg: `Failed: ${error.message}` });
     } else {
-      console.log(`[settings] Successfully updated ${field}, DB value:`, data?.[0]?.[field]);
-      setSaveStatus({ field, ok: true, msg: `Saved ${field} = ${JSON.stringify(value)}` });
+      console.log(`[settings] Updated ${field}`, data?.[0]?.[field]);
+      setSaveStatus({ field, ok: true, msg: `Saved ${field}` });
     }
 
     setTimeout(() => setSaveStatus(null), 3000);
   }
 
+  async function saveToBank(keyword: string, keywordType: "title" | "description" | "exclude") {
+    // Optimistic: add locally if not already present
+    const exists = bankKeywords.some(
+      (b) => b.keyword.toLowerCase() === keyword.toLowerCase() && b.keyword_type === keywordType
+    );
+    if (!exists) {
+      const optimistic: KeywordBankEntry = {
+        id: crypto.randomUUID(),
+        keyword,
+        keyword_type: keywordType,
+        created_at: new Date().toISOString(),
+      };
+      setBankKeywords((prev) => [...prev, optimistic]);
+    }
+
+    await supabase
+      .from("keyword_bank")
+      .upsert(
+        { keyword, keyword_type: keywordType },
+        { onConflict: "keyword,keyword_type", ignoreDuplicates: true }
+      );
+  }
+
   function handleAddTag(field: "title_keywords" | "exclude_keywords" | "locations" | "description_keywords") {
+    const typeMap: Record<string, "title" | "description" | "exclude"> = {
+      title_keywords: "title",
+      description_keywords: "description",
+      exclude_keywords: "exclude",
+    };
     return (tag: string) => {
       if (!config) return;
       const current = (config[field] as string[]) ?? [];
       updateConfigField(field, [...current, tag]);
+      // Also save to bank (not for locations)
+      if (typeMap[field]) {
+        saveToBank(tag, typeMap[field]);
+      }
     };
   }
 
@@ -133,7 +192,90 @@ export default function SettingsPage() {
       if (!config) return;
       const current = (config[field] as string[]) ?? [];
       updateConfigField(field, current.filter((t) => t !== tag));
+      // Keyword stays in bank — no deletion
     };
+  }
+
+  function handleBankClick(
+    field: "title_keywords" | "description_keywords" | "exclude_keywords",
+    keyword: string
+  ) {
+    if (!config) return;
+    const current = (config[field] as string[]) ?? [];
+    if (!current.some((k) => k.toLowerCase() === keyword.toLowerCase())) {
+      updateConfigField(field, [...current, keyword]);
+    }
+  }
+
+  async function handleLoadPreset(preset: KeywordPreset) {
+    if (!config) return;
+
+    // Save all preset keywords to bank
+    const toSeed: { keyword: string; keyword_type: string }[] = [];
+    for (const kw of preset.title_keywords) toSeed.push({ keyword: kw, keyword_type: "title" });
+    for (const kw of preset.description_keywords) toSeed.push({ keyword: kw, keyword_type: "description" });
+    for (const kw of preset.exclude_keywords) toSeed.push({ keyword: kw, keyword_type: "exclude" });
+    if (toSeed.length > 0) {
+      supabase
+        .from("keyword_bank")
+        .upsert(toSeed, { onConflict: "keyword,keyword_type", ignoreDuplicates: true })
+        .then(() => fetchData());
+    }
+
+    // Update config with all three keyword fields
+    const prevConfig = config;
+    const newConfig = {
+      ...config,
+      title_keywords: preset.title_keywords,
+      description_keywords: preset.description_keywords,
+      exclude_keywords: preset.exclude_keywords,
+    };
+    setConfig(newConfig);
+
+    const { error } = await supabase
+      .from("search_configs")
+      .update({
+        title_keywords: preset.title_keywords,
+        description_keywords: preset.description_keywords,
+        exclude_keywords: preset.exclude_keywords,
+      })
+      .eq("id", config.id);
+
+    if (error) {
+      setConfig(prevConfig);
+      setSaveStatus({ field: "preset", ok: false, msg: `Failed to load preset` });
+    } else {
+      setSaveStatus({ field: "preset", ok: true, msg: `Loaded preset "${preset.name}"` });
+    }
+    setTimeout(() => setSaveStatus(null), 3000);
+  }
+
+  async function handleSavePreset(name: string) {
+    if (!config) return;
+    const { error } = await supabase.from("keyword_presets").insert({
+      name,
+      title_keywords: config.title_keywords ?? [],
+      description_keywords: config.description_keywords ?? [],
+      exclude_keywords: config.exclude_keywords ?? [],
+    });
+    if (error) {
+      setSaveStatus({ field: "preset", ok: false, msg: `Failed to save preset` });
+    } else {
+      setSaveStatus({ field: "preset", ok: true, msg: `Saved preset "${name}"` });
+      fetchData();
+    }
+    setTimeout(() => setSaveStatus(null), 3000);
+  }
+
+  async function handleDeletePreset(id: string) {
+    await supabase.from("keyword_presets").delete().eq("id", id);
+    setPresets((prev) => prev.filter((p) => p.id !== id));
+  }
+
+  function bankKeywordsForType(type: "title" | "description" | "exclude"): string[] {
+    return bankKeywords
+      .filter((b) => b.keyword_type === type)
+      .map((b) => b.keyword);
   }
 
   if (loading) {
@@ -203,6 +345,14 @@ export default function SettingsPage() {
         <h2 className="text-lg font-semibold text-claude-primary mb-4">Search Configuration</h2>
         {config ? (
           <div className="space-y-5">
+            {/* Presets */}
+            <KeywordPresets
+              presets={presets}
+              onLoad={handleLoadPreset}
+              onSave={handleSavePreset}
+              onDelete={handleDeletePreset}
+            />
+
             {/* Title Keywords */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
@@ -223,6 +373,9 @@ export default function SettingsPage() {
                 tags={config.title_keywords ?? []}
                 onAdd={handleAddTag("title_keywords")}
                 onRemove={handleRemoveTag("title_keywords")}
+                bankKeywords={bankKeywordsForType("title")}
+                onBankClick={(kw) => handleBankClick("title_keywords", kw)}
+                onSaveToBank={(kw) => saveToBank(kw, "title")}
               />
             </div>
 
@@ -246,6 +399,9 @@ export default function SettingsPage() {
                 tags={config.description_keywords ?? []}
                 onAdd={handleAddTag("description_keywords")}
                 onRemove={handleRemoveTag("description_keywords")}
+                bankKeywords={bankKeywordsForType("description")}
+                onBankClick={(kw) => handleBankClick("description_keywords", kw)}
+                onSaveToBank={(kw) => saveToBank(kw, "description")}
               />
             </div>
 
@@ -289,11 +445,15 @@ export default function SettingsPage() {
               </div>
             )}
 
+            {/* Exclude Keywords */}
             <TagEditor
               label="Exclude Keywords"
               tags={config.exclude_keywords ?? []}
               onAdd={handleAddTag("exclude_keywords")}
               onRemove={handleRemoveTag("exclude_keywords")}
+              bankKeywords={bankKeywordsForType("exclude")}
+              onBankClick={(kw) => handleBankClick("exclude_keywords", kw)}
+              onSaveToBank={(kw) => saveToBank(kw, "exclude")}
             />
 
             {/* Geography Filter */}
