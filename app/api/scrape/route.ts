@@ -4,6 +4,7 @@ import {
   fetchGreenhouseJobs,
   fetchLeverJobs,
   fetchAshbyJobs,
+  fetchCuratedBoardJobs,
   fetchAdzunaJobs,
   matchesKeywords,
   matchesExcludes,
@@ -49,7 +50,7 @@ export async function POST(request: Request) {
     const descriptionMatchMode = config.description_match_mode ?? "OR";
     const crossMatchMode = config.cross_match_mode ?? "AND";
 
-    let allRaw: RawJob[] = [];
+    const allRaw: RawJob[] = [];
 
     if (companySearchEnabled) {
       // ---- COMPANY MODE: Scrape watchlist companies via APIs ----
@@ -88,22 +89,20 @@ export async function POST(request: Request) {
         allRaw.push(...jobs);
       }
     } else {
-      // ---- KEYWORD MODE: Search via Adzuna API (works on Vercel) ----
-      try {
-        allRaw = await fetchAdzunaJobs(
-          titleKeywords,
-          descriptionKeywords,
-          locations,
-          includeRemote,
-          100
-        );
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : "Adzuna error";
-        console.error("[adzuna] Failed:", msg);
-        return NextResponse.json(
-          { error: `Keyword search failed: ${msg}` },
-          { status: 500 }
-        );
+      // ---- KEYWORD MODE: Scrape curated boards + optional Adzuna ----
+      // Primary: scan ~50 curated Greenhouse/Lever/Ashby boards (no API keys needed)
+      const curatedJobs = await fetchCuratedBoardJobs();
+      allRaw.push(...curatedJobs);
+
+      // Bonus: if Adzuna keys are configured, also search Adzuna
+      const adzunaJobs = await fetchAdzunaJobs(
+        titleKeywords,
+        descriptionKeywords,
+        locations,
+        100
+      );
+      if (adzunaJobs.length > 0) {
+        allRaw.push(...adzunaJobs);
       }
     }
 

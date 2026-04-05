@@ -381,22 +381,57 @@ export async function fetchLeverJobs(
   }
 }
 
-// ---------- Adzuna keyword search ----------
+// ---------- Curated board keyword search (no API keys needed) ----------
+
+import { CURATED_BOARDS, CuratedBoard } from "./curated-boards";
+
+/**
+ * Scrape curated Greenhouse/Lever/Ashby boards and return all jobs.
+ * Fetches boards in parallel batches to avoid overwhelming the APIs.
+ */
+export async function fetchCuratedBoardJobs(): Promise<RawJob[]> {
+  const BATCH_SIZE = 10;
+  const allJobs: RawJob[] = [];
+
+  for (let i = 0; i < CURATED_BOARDS.length; i += BATCH_SIZE) {
+    const batch = CURATED_BOARDS.slice(i, i + BATCH_SIZE);
+    const results = await Promise.allSettled(
+      batch.map((b) => fetchBoardJobs(b))
+    );
+    for (const result of results) {
+      if (result.status === "fulfilled") {
+        allJobs.push(...result.value);
+      }
+    }
+  }
+
+  return allJobs;
+}
+
+async function fetchBoardJobs(board: CuratedBoard): Promise<RawJob[]> {
+  switch (board.board) {
+    case "greenhouse":
+      return fetchGreenhouseJobs(board.name, board.slug);
+    case "lever":
+      return fetchLeverJobs(board.name, board.slug);
+    case "ashby":
+      return fetchAshbyJobs(board.name, board.slug);
+    default:
+      return [];
+  }
+}
+
+// ---------- Adzuna keyword search (optional, needs API keys) ----------
 
 export async function fetchAdzunaJobs(
   titleKeywords: string[],
   descriptionKeywords: string[],
   locations: string[],
-  includeRemote: boolean,
   maxResults: number = 100
 ): Promise<RawJob[]> {
   const appId = process.env.ADZUNA_APP_ID;
   const appKey = process.env.ADZUNA_APP_KEY;
-  if (!appId || !appKey) {
-    throw new Error(
-      "ADZUNA_APP_ID and ADZUNA_APP_KEY env vars are required for keyword search mode"
-    );
-  }
+  if (!appId || !appKey) return [];
 
   const keywords = [...titleKeywords, ...descriptionKeywords].filter(Boolean);
   if (keywords.length === 0) return [];
