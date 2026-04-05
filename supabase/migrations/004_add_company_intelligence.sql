@@ -1,0 +1,23 @@
+-- Add company intelligence columns to watchlist_companies
+ALTER TABLE watchlist_companies
+  ADD COLUMN IF NOT EXISTS funding_stage text,
+  ADD COLUMN IF NOT EXISTS total_raised text,
+  ADD COLUMN IF NOT EXISTS total_employees integer,
+  ADD COLUMN IF NOT EXISTS employee_growth_6m float,
+  ADD COLUMN IF NOT EXISTS last_enriched_at timestamptz,
+  ADD COLUMN IF NOT EXISTS revenue_stage text,
+  ADD COLUMN IF NOT EXISTS key_investors text,
+  ADD COLUMN IF NOT EXISTS pe_revenue_exposure text,
+  ADD COLUMN IF NOT EXISTS glassdoor_rating float,
+  ADD COLUMN IF NOT EXISTS glassdoor_url text,
+  ADD COLUMN IF NOT EXISTS last_funding_date date,
+  ADD COLUMN IF NOT EXISTS last_funding_amount text,
+  ADD COLUMN IF NOT EXISTS recent_news text,
+  ADD COLUMN IF NOT EXISTS linkedin_url text,
+  ADD COLUMN IF NOT EXISTS headquarters text,
+  ADD COLUMN IF NOT EXISTS year_founded integer,
+  ADD COLUMN IF NOT EXISTS ceo_name text,
+  ADD COLUMN IF NOT EXISTS cro_name text,
+  ADD COLUMN IF NOT EXISTS competitors text,
+  ADD COLUMN IF NOT EXISTS tech_stack text,
+  ADD COLUMN IF NOT EXISTS company_fit_score integer;

@@ -69,15 +69,15 @@ export default function ApplicationDetail({
   const job = application.jobs;
 
   return (
-    <div className="fixed inset-y-0 right-0 w-[480px] bg-white shadow-xl border-l border-gray-200 z-50 flex flex-col">
-      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+    <div className="fixed inset-y-0 right-0 w-[480px] bg-white shadow-xl border-l border-claude-border z-50 flex flex-col">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-claude-border">
         <div>
-          <div className="text-sm text-gray-500">{job?.company}</div>
-          <h2 className="text-lg font-semibold text-gray-900">{job?.title}</h2>
+          <div className="text-sm text-claude-tertiary">{job?.company}</div>
+          <h2 className="text-lg font-semibold text-claude-primary">{job?.title}</h2>
         </div>
         <button
           onClick={onClose}
-          className="text-gray-400 hover:text-gray-600 text-xl leading-none"
+          className="text-claude-tertiary hover:text-claude-secondary text-xl leading-none"
         >
           &times;
         </button>
@@ -85,11 +85,11 @@ export default function ApplicationDetail({
 
       <div className="flex-1 overflow-y-auto p-6 space-y-5">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Stage</label>
+          <label className="block text-sm font-medium text-claude-secondary mb-1">Stage</label>
           <select
             value={stage}
             onChange={(e) => setStage(e.target.value as PipelineStage)}
-            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+            className="w-full border border-claude-border rounded-lg px-3 py-2 text-sm"
           >
             {PIPELINE_STAGES.map((s) => (
               <option key={s} value={s}>
@@ -102,60 +102,60 @@ export default function ApplicationDetail({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+          <label className="block text-sm font-medium text-claude-secondary mb-1">Notes</label>
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={4}
-            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm resize-none"
+            className="w-full border border-claude-border rounded-lg px-3 py-2 text-sm resize-none"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Contacts</label>
+          <label className="block text-sm font-medium text-claude-secondary mb-1">Contacts</label>
           <textarea
             value={contacts}
             onChange={(e) => setContacts(e.target.value)}
             rows={2}
-            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm resize-none"
+            className="w-full border border-claude-border rounded-lg px-3 py-2 text-sm resize-none"
             placeholder="Recruiter name, hiring manager, etc."
           />
         </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Next Action</label>
+            <label className="block text-sm font-medium text-claude-secondary mb-1">Next Action</label>
             <input
               type="text"
               value={nextAction}
               onChange={(e) => setNextAction(e.target.value)}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+              className="w-full border border-claude-border rounded-lg px-3 py-2 text-sm"
               placeholder="Follow up, prep, etc."
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Action Date</label>
+            <label className="block text-sm font-medium text-claude-secondary mb-1">Action Date</label>
             <input
               type="date"
               value={nextActionDate}
               onChange={(e) => setNextActionDate(e.target.value)}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+              className="w-full border border-claude-border rounded-lg px-3 py-2 text-sm"
             />
           </div>
         </div>
 
         <div>
-          <h3 className="text-sm font-medium text-gray-700 mb-2">Activity Log</h3>
+          <h3 className="text-sm font-medium text-claude-secondary mb-2">Activity Log</h3>
           {activityLog.length === 0 ? (
-            <p className="text-sm text-gray-400">No activity recorded yet.</p>
+            <p className="text-sm text-claude-tertiary">No activity recorded yet.</p>
           ) : (
             <div className="space-y-2">
               {activityLog.map((entry) => (
                 <div key={entry.id} className="flex items-center gap-2 text-sm">
-                  <span className="text-gray-400 text-xs whitespace-nowrap">
+                  <span className="text-claude-tertiary text-xs whitespace-nowrap">
                     {timeAgo(entry.changed_at)}
                   </span>
-                  <span className="text-gray-600">
+                  <span className="text-claude-secondary">
                     {capitalize(entry.from_stage || "?")} → {capitalize(entry.to_stage || "?")}
                   </span>
                 </div>
@@ -165,11 +165,11 @@ export default function ApplicationDetail({
         </div>
       </div>
 
-      <div className="px-6 py-4 border-t border-gray-200">
+      <div className="px-6 py-4 border-t border-claude-border">
         <button
           onClick={handleSave}
           disabled={saving}
-          className="w-full bg-gray-900 text-white rounded-md py-2 text-sm font-medium hover:bg-gray-700 transition-colors disabled:opacity-50"
+          className="w-full bg-claude-accent text-white rounded-lg py-2 text-sm font-medium hover:bg-claude-accent-hover transition-colors disabled:opacity-50"
         >
           {saving ? "Saving..." : "Save Changes"}
         </button>

@@ -127,13 +127,91 @@ export function computeSeniorityScore(title: string | null, description: string 
   return score;
 }
 
+// ---------- Company intelligence ----------
+
+import { WatchlistCompany } from "./types";
+
+const RECOGNIZABLE_INVESTORS = [
+  "a16z", "andreessen", "sequoia", "greylock", "accel", "benchmark",
+  "lightspeed", "kkr", "thoma bravo", "vista equity", "general atlantic",
+  "tiger global", "coatue", "insight partners", "bessemer", "index ventures",
+  "founders fund", "kleiner perkins", "gv", "google ventures", "softbank",
+  "ivp", "ribbit", "menlo", "NEA", "battery ventures",
+];
+
+export function computeCompanyFitScore(co: WatchlistCompany): number {
+  let score = 0;
+
+  // PE exposure: Core=30, Significant=20, Emerging=10
+  const pe = co.pe_revenue_exposure ?? "";
+  if (pe.startsWith("Core")) score += 30;
+  else if (pe.startsWith("Significant")) score += 20;
+  else if (pe.startsWith("Emerging")) score += 10;
+
+  // Employee growth >15%=15, >5%=10
+  const growth = co.employee_growth_6m ?? 0;
+  if (growth > 15) score += 15;
+  else if (growth > 5) score += 10;
+
+  // Glassdoor >4.0=10, >3.5=5
+  const gd = co.glassdoor_rating ?? 0;
+  if (gd > 4.0) score += 10;
+  else if (gd > 3.5) score += 5;
+
+  // Revenue stage $10M+=10
+  const rev = co.revenue_stage ?? "";
+  if (rev.includes("$10-50M") || rev.includes("$50-100M") || rev.includes("$100M+")) {
+    score += 10;
+  }
+
+  // Recent funding within last 12 months=15
+  if (co.last_funding_date) {
+    const fundingDate = new Date(co.last_funding_date);
+    const monthsAgo = (Date.now() - fundingDate.getTime()) / (1000 * 60 * 60 * 24 * 30);
+    if (monthsAgo <= 12) score += 15;
+  }
+
+  // Has CRO/sales leader=10
+  if (co.cro_name?.trim()) score += 10;
+
+  // Has recognizable investors=10
+  if (co.key_investors) {
+    const investorsLower = co.key_investors.toLowerCase();
+    if (RECOGNIZABLE_INVESTORS.some((inv) => investorsLower.includes(inv.toLowerCase()))) {
+      score += 10;
+    }
+  }
+
+  return Math.min(100, score);
+}
+
+export function fundingStageBadge(stage: string | null): { label: string; color: string } | null {
+  if (!stage) return null;
+  if (stage === "Seed" || stage === "Series A")
+    return { label: stage, color: "bg-emerald-100 text-emerald-800" };
+  if (stage === "Series B" || stage === "Series C")
+    return { label: stage, color: "bg-sky-100 text-sky-800" };
+  if (stage === "Series D+" || stage === "PE-backed")
+    return { label: stage, color: "bg-violet-100 text-violet-800" };
+  if (stage === "Public")
+    return { label: stage, color: "bg-claude-hover text-claude-secondary" };
+  return { label: stage, color: "bg-claude-hover text-claude-secondary" };
+}
+
+export function growthIndicator(growth: number | null): { icon: string; color: string } {
+  if (growth == null) return { icon: "", color: "" };
+  if (growth > 10) return { icon: "\u2191", color: "text-emerald-600" };
+  if (growth >= 0) return { icon: "\u2192", color: "text-amber-500" };
+  return { icon: "\u2193", color: "text-red-500" };
+}
+
 export function seniorityBadge(score: number | null): { label: string; color: string } | null {
   switch (score) {
-    case 5: return { label: "C-Suite/Head", color: "bg-purple-100 text-purple-800" };
+    case 5: return { label: "C-Suite/Head", color: "bg-violet-100 text-violet-800" };
     case 4: return { label: "VP", color: "bg-indigo-100 text-indigo-800" };
-    case 3: return { label: "Director", color: "bg-blue-100 text-blue-800" };
-    case 2: return { label: "Senior", color: "bg-teal-100 text-teal-800" };
-    case 1: return { label: "Mid-Level", color: "bg-gray-100 text-gray-700" };
+    case 3: return { label: "Director", color: "bg-sky-100 text-sky-800" };
+    case 2: return { label: "Senior", color: "bg-emerald-100 text-emerald-800" };
+    case 1: return { label: "Mid-Level", color: "bg-claude-hover text-claude-secondary" };
     default: return null;
   }
 }

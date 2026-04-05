@@ -290,8 +290,8 @@ export default function JobFeed() {
 
   if (loading) {
     return (
-      <div className="max-w-5xl mx-auto py-8 px-6">
-        <p className="text-gray-500 text-center py-16">Loading jobs...</p>
+      <div className="max-w-4xl mx-auto py-8 px-6">
+        <p className="text-claude-tertiary text-center py-16">Loading jobs...</p>
       </div>
     );
   }
@@ -300,14 +300,14 @@ export default function JobFeed() {
   const hasDescKw = descriptionKeywords.length > 0;
 
   return (
-    <div className="max-w-5xl mx-auto py-6 px-6">
+    <div className="max-w-4xl mx-auto py-6 px-6">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          <h1 className="text-xl font-bold text-gray-900">Job Feed</h1>
+          <h1 className="text-xl font-bold text-claude-primary">Job Feed</h1>
           <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
             companySearchEnabled
-              ? "bg-blue-100 text-blue-700"
-              : "bg-purple-100 text-purple-700"
+              ? "bg-claude-accent-light text-claude-accent"
+              : "bg-violet-100 text-violet-700"
           }`}>
             {companySearchEnabled ? "Company Search" : "Keyword Search"}
           </span>
@@ -325,28 +325,28 @@ export default function JobFeed() {
 
       {/* Keyword config indicator */}
       {(hasTitleKw || hasDescKw) && (
-        <div className="bg-blue-50 border border-blue-200 rounded-md px-3 py-2 mb-4 text-xs text-blue-700 flex flex-wrap items-center gap-1">
+        <div className="bg-claude-accent-light border border-claude-border rounded-xl px-3 py-2 mb-4 text-xs text-claude-accent flex flex-wrap items-center gap-1">
           <span className="font-medium">Config:</span>
           {hasTitleKw && (
             <span>
               Title matches {titleMatchMode === "OR" ? "any" : "all"} of{" "}
               {(searchConfig?.title_keywords ?? []).map((kw, i) => (
                 <span key={kw}>
-                  {i > 0 && <span className="text-blue-400"> {titleMatchMode === "OR" ? "or" : "&"} </span>}
+                  {i > 0 && <span className="text-claude-tertiary"> {titleMatchMode === "OR" ? "or" : "&"} </span>}
                   <span className="font-medium">&ldquo;{kw}&rdquo;</span>
                 </span>
               ))}
             </span>
           )}
           {hasTitleKw && hasDescKw && (
-            <span className="font-bold text-blue-500 mx-1">{crossMatchMode}</span>
+            <span className="font-bold text-claude-accent mx-1">{crossMatchMode}</span>
           )}
           {hasDescKw && (
             <span>
               Description matches {descriptionMatchMode === "OR" ? "any" : "all"} of{" "}
               {(searchConfig?.description_keywords ?? []).map((kw, i) => (
                 <span key={kw}>
-                  {i > 0 && <span className="text-blue-400"> {descriptionMatchMode === "OR" ? "or" : "&"} </span>}
+                  {i > 0 && <span className="text-claude-tertiary"> {descriptionMatchMode === "OR" ? "or" : "&"} </span>}
                   <span className="font-medium">&ldquo;{kw}&rdquo;</span>
                 </span>
               ))}
@@ -357,9 +357,9 @@ export default function JobFeed() {
 
       {companySearchEnabled && !hasWatchlist ? (
         <div className="text-center py-16">
-          <p className="text-gray-500">No companies in your watchlist yet.</p>
-          <p className="text-gray-400 text-sm mt-1">
-            Go to <a href="/settings" className="text-blue-600 hover:underline">Settings</a> to add companies.
+          <p className="text-claude-secondary">No companies in your watchlist yet.</p>
+          <p className="text-claude-tertiary text-sm mt-1">
+            Go to <a href="/settings" className="text-claude-accent hover:underline">Settings</a> to add companies.
           </p>
         </div>
       ) : (

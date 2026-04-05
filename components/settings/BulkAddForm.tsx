@@ -197,11 +197,11 @@ export default function BulkAddForm({
   const isRunning = processing || scraping;
 
   return (
-    <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-3">
+    <div className="bg-claude-bg border border-claude-border rounded-xl p-4 space-y-3">
       {!done ? (
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-claude-secondary mb-1">
               Company Websites
             </label>
             <textarea
@@ -210,13 +210,13 @@ export default function BulkAddForm({
               placeholder={`Paste company websites, one per line:\nanthropic.com\nopenai.com\nrogo.ai\nalphasense.com`}
               rows={5}
               disabled={isRunning}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent disabled:bg-gray-100 font-mono"
+              className="w-full border border-claude-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-claude-accent focus:border-transparent disabled:bg-claude-hover font-mono"
             />
           </div>
 
           {/* Progress */}
           {isRunning && (
-            <div className="flex items-center gap-2 text-sm text-gray-600">
+            <div className="flex items-center gap-2 text-sm text-claude-secondary">
               <Spinner />
               {processing
                 ? `Processing ${currentIndex} of ${totalCount}...`
@@ -237,7 +237,7 @@ export default function BulkAddForm({
             <button
               type="submit"
               disabled={!input.trim() || isRunning}
-              className="px-3 py-1.5 bg-gray-900 text-white text-sm rounded-md hover:bg-gray-800 disabled:opacity-40"
+              className="px-3 py-1.5 bg-claude-accent text-white text-sm rounded-lg hover:bg-claude-accent-hover disabled:opacity-40"
             >
               {isRunning ? (
                 <span className="flex items-center gap-2">
@@ -252,7 +252,7 @@ export default function BulkAddForm({
               type="button"
               onClick={onCancel}
               disabled={isRunning}
-              className="px-3 py-1.5 bg-white text-gray-700 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-40"
+              className="px-3 py-1.5 bg-white text-claude-secondary text-sm border border-claude-border rounded-lg hover:bg-claude-hover disabled:opacity-40"
             >
               Cancel
             </button>
@@ -263,7 +263,7 @@ export default function BulkAddForm({
           {/* Summary */}
           <div className="text-sm space-y-1">
             {addedCount > 0 && (
-              <div className="text-green-700 font-medium">
+              <div className="text-emerald-700 font-medium">
                 Added {addedCount} {addedCount === 1 ? "company" : "companies"}
               </div>
             )}
@@ -286,7 +286,7 @@ export default function BulkAddForm({
               </div>
             )}
             {scrapeResult !== null && (
-              <div className="text-green-700 font-medium">
+              <div className="text-emerald-700 font-medium">
                 Found {scrapeResult} matching jobs
               </div>
             )}
@@ -302,7 +302,7 @@ export default function BulkAddForm({
           <button
             type="button"
             onClick={onComplete}
-            className="px-3 py-1.5 bg-gray-900 text-white text-sm rounded-md hover:bg-gray-800"
+            className="px-3 py-1.5 bg-claude-accent text-white text-sm rounded-lg hover:bg-claude-accent-hover"
           >
             Done
           </button>
@@ -316,11 +316,11 @@ function ResultRow({ result }: { result: CompanyResult }) {
   return (
     <div className="flex items-center gap-2 text-sm">
       {result.status === "pending" && (
-        <span className="text-gray-400 w-4 text-center">&middot;</span>
+        <span className="text-claude-tertiary w-4 text-center">&middot;</span>
       )}
       {result.status === "processing" && <Spinner />}
       {result.status === "added" && (
-        <span className="text-green-600 w-4 text-center">&check;</span>
+        <span className="text-emerald-600 w-4 text-center">&check;</span>
       )}
       {result.status === "skipped" && (
         <span className="text-amber-500 w-4 text-center">&ndash;</span>
@@ -331,19 +331,19 @@ function ResultRow({ result }: { result: CompanyResult }) {
       <span
         className={
           result.status === "skipped"
-            ? "text-gray-400"
+            ? "text-claude-tertiary"
             : result.status === "failed"
             ? "text-red-600"
-            : "text-gray-700"
+            : "text-claude-secondary"
         }
       >
         {result.name}
       </span>
       {result.status === "added" && result.board && (
-        <span className="text-xs text-green-600">({result.board})</span>
+        <span className="text-xs text-emerald-600">({result.board})</span>
       )}
       {result.status === "added" && !result.board && (
-        <span className="text-xs text-gray-400">(no board detected)</span>
+        <span className="text-xs text-claude-tertiary">(no board detected)</span>
       )}
       {result.status === "skipped" && (
         <span className="text-xs text-amber-500">duplicate</span>
@@ -355,7 +355,7 @@ function ResultRow({ result }: { result: CompanyResult }) {
 function Spinner() {
   return (
     <svg
-      className="animate-spin h-4 w-4 text-gray-500 shrink-0"
+      className="animate-spin h-4 w-4 text-claude-tertiary shrink-0"
       viewBox="0 0 24 24"
     >
       <circle

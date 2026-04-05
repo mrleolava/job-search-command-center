@@ -81,13 +81,13 @@ export default function CompanyWatchlist({
   return (
     <div>
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-semibold text-gray-900">
+        <h3 className="text-sm font-semibold text-claude-primary">
           Watchlist Companies ({companies.length})
         </h3>
         {!showAddForm && (
           <button
             onClick={() => setShowAddForm(true)}
-            className="px-3 py-1.5 bg-gray-900 text-white text-sm rounded-md hover:bg-gray-800"
+            className="px-3 py-1.5 bg-claude-accent text-white text-sm rounded-lg hover:bg-claude-accent-hover"
           >
             + Add Companies
           </button>
@@ -117,11 +117,11 @@ export default function CompanyWatchlist({
           ) : (
             <div
               key={co.id}
-              className="flex items-center justify-between bg-white border border-gray-200 rounded-lg px-4 py-3"
+              className="flex items-center justify-between bg-white border border-claude-border rounded-xl px-4 py-3"
             >
               <div>
-                <span className="font-medium text-gray-900 text-sm">{co.name}</span>
-                <div className="flex gap-3 mt-0.5 text-xs text-gray-500">
+                <span className="font-medium text-claude-primary text-sm">{co.name}</span>
+                <div className="flex gap-3 mt-0.5 text-xs text-claude-tertiary">
                   {co.greenhouse_slug && <span>greenhouse: {co.greenhouse_slug}</span>}
                   {co.lever_slug && <span>lever: {co.lever_slug}</span>}
                   {co.ashby_slug && <span>ashby: {co.ashby_slug}</span>}
@@ -134,7 +134,7 @@ export default function CompanyWatchlist({
               <div className="flex gap-1">
                 <button
                   onClick={() => setEditingId(co.id)}
-                  className="px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded"
+                  className="px-2 py-1 text-xs text-claude-secondary hover:bg-claude-hover rounded-lg"
                 >
                   Edit
                 </button>
@@ -142,13 +142,13 @@ export default function CompanyWatchlist({
                   <div className="flex gap-1">
                     <button
                       onClick={() => handleDelete(co.id)}
-                      className="px-2 py-1 text-xs text-red-600 hover:bg-red-50 rounded font-medium"
+                      className="px-2 py-1 text-xs text-red-600 hover:bg-red-50 rounded-lg font-medium"
                     >
                       Confirm
                     </button>
                     <button
                       onClick={() => setDeletingId(null)}
-                      className="px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded"
+                      className="px-2 py-1 text-xs text-claude-secondary hover:bg-claude-hover rounded-lg"
                     >
                       Cancel
                     </button>
@@ -156,7 +156,7 @@ export default function CompanyWatchlist({
                 ) : (
                   <button
                     onClick={() => setDeletingId(co.id)}
-                    className="px-2 py-1 text-xs text-red-600 hover:bg-red-50 rounded"
+                    className="px-2 py-1 text-xs text-red-600 hover:bg-red-50 rounded-lg"
                   >
                     Delete
                   </button>
@@ -166,7 +166,7 @@ export default function CompanyWatchlist({
           )
         )}
         {companies.length === 0 && (
-          <p className="text-sm text-gray-500 py-4 text-center">
+          <p className="text-sm text-claude-tertiary py-4 text-center">
             No companies yet. Add one to start scraping jobs.
           </p>
         )}

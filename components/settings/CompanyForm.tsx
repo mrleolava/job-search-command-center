@@ -74,8 +74,8 @@ export default function CompanyForm({
   }
 
   function statusIcon(status: SlugStatus) {
-    if (status === "checking") return <span className="text-gray-400 text-xs">...</span>;
-    if (status === "valid") return <span className="text-green-600 text-sm">&#10003;</span>;
+    if (status === "checking") return <span className="text-claude-tertiary text-xs">...</span>;
+    if (status === "valid") return <span className="text-emerald-600 text-sm">&#10003;</span>;
     if (status === "invalid") return <span className="text-red-500 text-sm">&#10007;</span>;
     return null;
   }
@@ -96,34 +96,34 @@ export default function CompanyForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-3">
+    <form onSubmit={handleSubmit} className="bg-claude-bg border border-claude-border rounded-xl p-4 space-y-3">
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Company Name</label>
+          <label className="block text-sm font-medium text-claude-secondary mb-1">Company Name</label>
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
             disabled={saving}
-            className="w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent disabled:bg-gray-100"
+            className="w-full border border-claude-border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-claude-accent focus:border-transparent disabled:bg-claude-hover"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Website</label>
+          <label className="block text-sm font-medium text-claude-secondary mb-1">Website</label>
           <input
             type="text"
             value={website}
             onChange={(e) => setWebsite(e.target.value)}
             placeholder="e.g. openai.com"
             disabled={saving}
-            className="w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent disabled:bg-gray-100"
+            className="w-full border border-claude-border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-claude-accent focus:border-transparent disabled:bg-claude-hover"
           />
         </div>
       </div>
       <div className="grid grid-cols-3 gap-3">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-claude-secondary mb-1">
             Greenhouse {statusIcon(ghStatus)}
           </label>
           <input
@@ -133,11 +133,11 @@ export default function CompanyForm({
             onBlur={verifyGreenhouse}
             placeholder="e.g. openai"
             disabled={saving}
-            className="w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent disabled:bg-gray-100"
+            className="w-full border border-claude-border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-claude-accent focus:border-transparent disabled:bg-claude-hover"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-claude-secondary mb-1">
             Lever {statusIcon(leverStatus)}
           </label>
           <input
@@ -147,11 +147,11 @@ export default function CompanyForm({
             onBlur={verifyLever}
             placeholder="e.g. netflix"
             disabled={saving}
-            className="w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent disabled:bg-gray-100"
+            className="w-full border border-claude-border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-claude-accent focus:border-transparent disabled:bg-claude-hover"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-claude-secondary mb-1">
             Ashby {statusIcon(ashbyStatus)}
           </label>
           <input
@@ -161,7 +161,7 @@ export default function CompanyForm({
             onBlur={verifyAshby}
             placeholder="e.g. listenlabs"
             disabled={saving}
-            className="w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent disabled:bg-gray-100"
+            className="w-full border border-claude-border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-claude-accent focus:border-transparent disabled:bg-claude-hover"
           />
         </div>
       </div>
@@ -169,7 +169,7 @@ export default function CompanyForm({
         <button
           type="submit"
           disabled={!name.trim() || saving}
-          className="px-3 py-1.5 bg-gray-900 text-white text-sm rounded-md hover:bg-gray-800 disabled:opacity-40"
+          className="px-3 py-1.5 bg-claude-accent text-white text-sm rounded-lg hover:bg-claude-accent-hover disabled:opacity-40"
         >
           {saving ? "Saving..." : "Update"}
         </button>
@@ -177,7 +177,7 @@ export default function CompanyForm({
           type="button"
           onClick={onCancel}
           disabled={saving}
-          className="px-3 py-1.5 bg-white text-gray-700 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-40"
+          className="px-3 py-1.5 bg-white text-claude-secondary text-sm border border-claude-border rounded-lg hover:bg-claude-hover disabled:opacity-40"
         >
           Cancel
         </button>

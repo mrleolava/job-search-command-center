@@ -38,13 +38,13 @@ export const PIPELINE_STAGES: PipelineStage[] = [
 ];
 
 export const STAGE_COLORS: Record<PipelineStage, string> = {
-  saved: "bg-gray-500",
-  applied: "bg-blue-500",
-  screening: "bg-yellow-500",
-  interviewing: "bg-purple-500",
-  offer: "bg-green-500",
-  rejected: "bg-red-500",
-  withdrawn: "bg-orange-500",
+  saved: "bg-claude-secondary",
+  applied: "bg-claude-accent",
+  screening: "bg-amber-500",
+  interviewing: "bg-violet-500",
+  offer: "bg-emerald-500",
+  rejected: "bg-rose-500",
+  withdrawn: "bg-claude-tertiary",
 };
 
 export interface Application {
@@ -85,7 +85,42 @@ export interface WatchlistCompany {
   lever_slug: string | null;
   website: string | null;
   profile_id: string;
+  funding_stage: string | null;
+  total_raised: string | null;
+  total_employees: number | null;
+  employee_growth_6m: number | null;
+  last_enriched_at: string | null;
+  revenue_stage: string | null;
+  key_investors: string | null;
+  pe_revenue_exposure: string | null;
+  glassdoor_rating: number | null;
+  glassdoor_url: string | null;
+  last_funding_date: string | null;
+  last_funding_amount: string | null;
+  recent_news: string | null;
+  linkedin_url: string | null;
+  headquarters: string | null;
+  year_founded: number | null;
+  ceo_name: string | null;
+  cro_name: string | null;
+  competitors: string | null;
+  tech_stack: string | null;
+  company_fit_score: number | null;
 }
+
+export const FUNDING_STAGES = [
+  "Seed", "Series A", "Series B", "Series C", "Series D+",
+  "PE-backed", "Public", "Private/Bootstrapped",
+] as const;
+
+export const REVENUE_STAGES = [
+  "Pre-revenue", "<$1M ARR", "$1-10M ARR", "$10-50M ARR",
+  "$50-100M ARR", "$100M+ ARR",
+] as const;
+
+export const PE_EXPOSURE_OPTIONS = [
+  "Core (>50%)", "Significant (20-50%)", "Emerging (<20%)", "None/Unknown",
+] as const;
 
 export type MatchMode = "AND" | "OR";
 

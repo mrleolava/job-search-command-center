@@ -25,10 +25,10 @@ function MatchModeToggle({
           console.log(`[MatchModeToggle:${label}] Clicked OR, current mode:`, mode);
           onChange("OR");
         }}
-        className={`px-2 py-0.5 rounded-l-md border transition-colors ${
+        className={`px-2 py-0.5 rounded-l-lg border transition-colors ${
           mode === "OR"
-            ? "bg-gray-900 text-white border-gray-900"
-            : "bg-white text-gray-500 border-gray-300 hover:bg-gray-50"
+            ? "bg-claude-accent text-white border-claude-accent"
+            : "bg-white text-claude-tertiary border-claude-border hover:bg-claude-hover"
         }`}
       >
         Match ANY
@@ -39,10 +39,10 @@ function MatchModeToggle({
           console.log(`[MatchModeToggle:${label}] Clicked AND, current mode:`, mode);
           onChange("AND");
         }}
-        className={`px-2 py-0.5 rounded-r-md border border-l-0 transition-colors ${
+        className={`px-2 py-0.5 rounded-r-lg border border-l-0 transition-colors ${
           mode === "AND"
-            ? "bg-gray-900 text-white border-gray-900"
-            : "bg-white text-gray-500 border-gray-300 hover:bg-gray-50"
+            ? "bg-claude-accent text-white border-claude-accent"
+            : "bg-white text-claude-tertiary border-claude-border hover:bg-claude-hover"
         }`}
       >
         Match ALL
@@ -138,21 +138,21 @@ export default function SettingsPage() {
 
   if (loading) {
     return (
-      <div className="max-w-3xl mx-auto py-16 px-6 text-center text-gray-500">
+      <div className="max-w-4xl mx-auto py-16 px-6 text-center text-claude-tertiary">
         Loading...
       </div>
     );
   }
 
   return (
-    <div className="max-w-3xl mx-auto py-8 px-6">
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Settings</h1>
+    <div className="max-w-4xl mx-auto py-8 px-6">
+      <h1 className="text-2xl font-bold text-claude-primary mb-6">Settings</h1>
 
       {/* Save status toast */}
       {saveStatus && (
-        <div className={`mb-4 px-3 py-2 rounded-md text-xs font-medium ${
+        <div className={`mb-4 px-3 py-2 rounded-xl text-xs font-medium ${
           saveStatus.ok
-            ? "bg-green-50 text-green-700 border border-green-200"
+            ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
             : "bg-red-50 text-red-700 border border-red-200"
         }`}>
           {saveStatus.ok ? "\u2713" : "\u2717"} {saveStatus.msg}
@@ -161,11 +161,11 @@ export default function SettingsPage() {
 
       {/* Search Mode Toggle */}
       {config && (
-        <section className="bg-white border border-gray-200 rounded-lg p-5 mb-6">
+        <section className="bg-white border border-claude-border rounded-xl p-6 mb-6 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">Search Mode</h2>
-              <p className="text-sm text-gray-500 mt-0.5">
+              <h2 className="text-lg font-semibold text-claude-primary">Search Mode</h2>
+              <p className="text-sm text-claude-tertiary mt-0.5">
                 {(config.company_search_enabled ?? true)
                   ? "Scraping jobs from your watchlist companies via their career pages"
                   : "Searching Indeed, LinkedIn & ZipRecruiter using your keywords"}
@@ -175,7 +175,7 @@ export default function SettingsPage() {
               type="button"
               onClick={() => updateConfigField("company_search_enabled", !(config.company_search_enabled ?? true))}
               className={`relative inline-flex h-7 w-[52px] shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
-                (config.company_search_enabled ?? true) ? "bg-gray-900" : "bg-gray-300"
+                (config.company_search_enabled ?? true) ? "bg-claude-accent" : "bg-claude-tertiary"
               }`}
             >
               <span className="sr-only">Company Search</span>
@@ -189,8 +189,8 @@ export default function SettingsPage() {
           <div className="mt-2 flex items-center gap-2">
             <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
               (config.company_search_enabled ?? true)
-                ? "bg-blue-100 text-blue-700"
-                : "bg-purple-100 text-purple-700"
+                ? "bg-claude-accent-light text-claude-accent"
+                : "bg-violet-100 text-violet-700"
             }`}>
               {(config.company_search_enabled ?? true) ? "Company Search" : "Keyword Search"}
             </span>
@@ -199,21 +199,21 @@ export default function SettingsPage() {
       )}
 
       {/* Search Config */}
-      <section className="bg-white border border-gray-200 rounded-lg p-5 mb-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Search Configuration</h2>
+      <section className="bg-white border border-claude-border rounded-xl p-6 mb-6 shadow-sm">
+        <h2 className="text-lg font-semibold text-claude-primary mb-4">Search Configuration</h2>
         {config ? (
           <div className="space-y-5">
             {/* Title Keywords */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label className="text-sm font-medium text-gray-700">Title Keywords</label>
+                <label className="text-sm font-medium text-claude-secondary">Title Keywords</label>
                 <MatchModeToggle
                   label="title"
                   mode={config.title_match_mode ?? "OR"}
                   onChange={(mode) => updateConfigField("title_match_mode", mode)}
                 />
               </div>
-              <p className="text-xs text-gray-400 mb-2">
+              <p className="text-xs text-claude-tertiary mb-2">
                 {(config.title_match_mode ?? "OR") === "OR"
                   ? "Jobs where title contains ANY of these keywords"
                   : "Jobs where title contains ALL of these keywords"}
@@ -229,14 +229,14 @@ export default function SettingsPage() {
             {/* Description Keywords */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label className="text-sm font-medium text-gray-700">Description Keywords</label>
+                <label className="text-sm font-medium text-claude-secondary">Description Keywords</label>
                 <MatchModeToggle
                   label="description"
                   mode={config.description_match_mode ?? "OR"}
                   onChange={(mode) => updateConfigField("description_match_mode", mode)}
                 />
               </div>
-              <p className="text-xs text-gray-400 mb-2">
+              <p className="text-xs text-claude-tertiary mb-2">
                 {(config.description_match_mode ?? "OR") === "OR"
                   ? "Jobs where description contains ANY of these keywords"
                   : "Jobs where description contains ALL of these keywords"}
@@ -251,11 +251,11 @@ export default function SettingsPage() {
 
             {/* Combine Mode */}
             {((config.title_keywords?.length ?? 0) > 0 || (config.description_keywords?.length ?? 0) > 0) && (
-              <div className="bg-gray-50 border border-gray-200 rounded-md p-3">
+              <div className="bg-claude-bg border border-claude-border rounded-xl p-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <span className="text-sm font-medium text-gray-700">Combine Mode</span>
-                    <p className="text-xs text-gray-400 mt-0.5">
+                    <span className="text-sm font-medium text-claude-secondary">Combine Mode</span>
+                    <p className="text-xs text-claude-tertiary mt-0.5">
                       {(config.cross_match_mode ?? "AND") === "AND"
                         ? "Title must match AND description must match"
                         : "Title matches OR description matches"}
@@ -265,10 +265,10 @@ export default function SettingsPage() {
                     <button
                       type="button"
                       onClick={() => updateConfigField("cross_match_mode", "AND")}
-                      className={`px-2 py-0.5 rounded-l-md border transition-colors ${
+                      className={`px-2 py-0.5 rounded-l-lg border transition-colors ${
                         (config.cross_match_mode ?? "AND") === "AND"
-                          ? "bg-gray-900 text-white border-gray-900"
-                          : "bg-white text-gray-500 border-gray-300 hover:bg-gray-50"
+                          ? "bg-claude-accent text-white border-claude-accent"
+                          : "bg-white text-claude-tertiary border-claude-border hover:bg-claude-hover"
                       }`}
                     >
                       AND
@@ -276,10 +276,10 @@ export default function SettingsPage() {
                     <button
                       type="button"
                       onClick={() => updateConfigField("cross_match_mode", "OR")}
-                      className={`px-2 py-0.5 rounded-r-md border border-l-0 transition-colors ${
+                      className={`px-2 py-0.5 rounded-r-lg border border-l-0 transition-colors ${
                         (config.cross_match_mode ?? "AND") === "OR"
-                          ? "bg-gray-900 text-white border-gray-900"
-                          : "bg-white text-gray-500 border-gray-300 hover:bg-gray-50"
+                          ? "bg-claude-accent text-white border-claude-accent"
+                          : "bg-white text-claude-tertiary border-claude-border hover:bg-claude-hover"
                       }`}
                     >
                       OR
@@ -298,28 +298,28 @@ export default function SettingsPage() {
 
             {/* Geography Filter */}
             <div>
-              <label className="text-sm font-medium text-gray-700 block mb-1.5">Geography</label>
+              <label className="text-sm font-medium text-claude-secondary block mb-1.5">Geography</label>
               <div className="flex gap-4 mb-3">
-                <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                <label className="flex items-center gap-2 text-sm text-claude-secondary cursor-pointer">
                   <input
                     type="checkbox"
                     checked={config.include_remote ?? true}
                     onChange={(e) => updateConfigField("include_remote", e.target.checked)}
-                    className="rounded accent-gray-900"
+                    className="rounded accent-claude-accent"
                   />
                   Remote
                 </label>
-                <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                <label className="flex items-center gap-2 text-sm text-claude-secondary cursor-pointer">
                   <input
                     type="checkbox"
                     checked={config.include_hybrid ?? true}
                     onChange={(e) => updateConfigField("include_hybrid", e.target.checked)}
-                    className="rounded accent-gray-900"
+                    className="rounded accent-claude-accent"
                   />
                   Hybrid
                 </label>
               </div>
-              <p className="text-xs text-gray-400 mb-2">
+              <p className="text-xs text-claude-tertiary mb-2">
                 Add cities or states to filter jobs by location during scraping
               </p>
               <TagEditor
@@ -332,26 +332,26 @@ export default function SettingsPage() {
             </div>
           </div>
         ) : (
-          <p className="text-sm text-gray-500">No search config found.</p>
+          <p className="text-sm text-claude-tertiary">No search config found.</p>
         )}
       </section>
 
       {/* Company Watchlist — only visible in company search mode */}
       {(config?.company_search_enabled ?? true) ? (
-        <section className="bg-white border border-gray-200 rounded-lg p-5 mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Company Watchlist</h2>
+        <section className="bg-white border border-claude-border rounded-xl p-6 mb-6 shadow-sm">
+          <h2 className="text-lg font-semibold text-claude-primary mb-4">Company Watchlist</h2>
           <CompanyWatchlist
             companies={companies}
             onUpdate={fetchData}
           />
         </section>
       ) : (
-        <section className="bg-white border border-gray-200 rounded-lg p-5 mb-6">
+        <section className="bg-white border border-claude-border rounded-xl p-6 mb-6 shadow-sm">
           <div className="text-center py-4">
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-claude-secondary">
               Searching all companies using your keywords via Indeed, LinkedIn & ZipRecruiter.
             </p>
-            <p className="text-xs text-gray-400 mt-1">
+            <p className="text-xs text-claude-tertiary mt-1">
               Switch to Company Search mode above to manage a watchlist of specific companies.
             </p>
           </div>
@@ -359,8 +359,8 @@ export default function SettingsPage() {
       )}
 
       {/* Scraper */}
-      <section className="bg-white border border-gray-200 rounded-lg p-5">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Job Scraper</h2>
+      <section className="bg-white border border-claude-border rounded-xl p-6 shadow-sm">
+        <h2 className="text-lg font-semibold text-claude-primary mb-4">Job Scraper</h2>
         <ScrapeButton />
       </section>
     </div>

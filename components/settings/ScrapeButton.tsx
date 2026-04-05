@@ -36,7 +36,7 @@ export default function ScrapeButton() {
       <button
         onClick={handleScrape}
         disabled={loading}
-        className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-md hover:bg-gray-800 disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
+        className="px-4 py-2 bg-claude-accent text-white text-sm font-medium rounded-lg hover:bg-claude-accent-hover disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
       >
         {loading && (
           <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
@@ -60,17 +60,17 @@ export default function ScrapeButton() {
       </button>
 
       {error && (
-        <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-700">
+        <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
           {error}
         </div>
       )}
 
       {result && (
-        <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-md text-sm text-green-800">
+        <div className="mt-3 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-sm text-emerald-800">
           <p className="font-medium mb-1">
             Scrape complete
             {result.mode && (
-              <span className="font-normal text-xs ml-2 text-green-600">
+              <span className="font-normal text-xs ml-2 text-emerald-600">
                 ({result.mode === "company" ? "Company APIs" : "JobSpy keyword search"})
               </span>
             )}

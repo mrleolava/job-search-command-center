@@ -68,7 +68,7 @@ export default function PipelineBoard() {
   if (loading) {
     return (
       <div className="max-w-7xl mx-auto py-8 px-6">
-        <p className="text-gray-500 text-center py-16">Loading pipeline...</p>
+        <p className="text-claude-tertiary text-center py-16">Loading pipeline...</p>
       </div>
     );
   }
@@ -76,8 +76,8 @@ export default function PipelineBoard() {
   return (
     <div className="max-w-7xl mx-auto py-6 px-6">
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-xl font-bold text-gray-900">Pipeline</h1>
-        <span className="text-sm text-gray-500">
+        <h1 className="text-xl font-bold text-claude-primary">Pipeline</h1>
+        <span className="text-sm text-claude-tertiary">
           {applications.length} applications
         </span>
       </div>

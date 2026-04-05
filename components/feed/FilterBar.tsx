@@ -103,7 +103,7 @@ export default function FilterBar({
   const hasActiveFilters = chips.length > 0;
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4 mb-4 space-y-3">
+    <div className="bg-white rounded-xl border border-claude-border p-6 mb-4 space-y-3 shadow-sm">
       {/* Row 1: Search + Sort */}
       <div className="flex gap-3 items-center">
         <input
@@ -111,12 +111,12 @@ export default function FilterBar({
           placeholder="Search jobs..."
           value={filters.search}
           onChange={(e) => set("search", e.target.value)}
-          className="border border-gray-300 rounded-md px-3 py-2 text-sm flex-1 min-w-[200px] focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+          className="border border-claude-border rounded-lg px-3 py-2 text-sm flex-1 min-w-[200px] focus:outline-none focus:ring-2 focus:ring-claude-accent focus:border-transparent"
         />
         <select
           value={filters.sortBy}
           onChange={(e) => set("sortBy", e.target.value)}
-          className="border border-gray-300 rounded-md px-3 py-2 text-sm bg-white"
+          className="border border-claude-border rounded-lg px-3 py-2 text-sm bg-white"
         >
           {SORT_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>
@@ -130,15 +130,15 @@ export default function FilterBar({
       <div className="flex flex-wrap gap-3 items-center">
         {/* Date quick buttons */}
         <div className="flex items-center gap-1">
-          <span className="text-xs text-gray-500 mr-1">Date:</span>
+          <span className="text-xs text-claude-tertiary mr-1">Date:</span>
           {DATE_OPTIONS.map((opt) => (
             <button
               key={opt.value}
               onClick={() => set("dateRange", filters.dateRange === opt.value ? "" : opt.value)}
-              className={`px-2 py-1 rounded-md text-xs font-medium transition-colors ${
+              className={`px-2 py-1 rounded-lg text-xs font-medium transition-colors ${
                 filters.dateRange === opt.value
-                  ? "bg-gray-900 text-white"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  ? "bg-claude-accent text-white"
+                  : "bg-claude-hover text-claude-secondary hover:bg-claude-border"
               }`}
             >
               {opt.label}
@@ -146,19 +146,19 @@ export default function FilterBar({
           ))}
         </div>
 
-        <span className="text-gray-200">|</span>
+        <span className="text-claude-border">|</span>
 
         {/* Seniority buttons */}
         <div className="flex items-center gap-1">
-          <span className="text-xs text-gray-500 mr-1">Level:</span>
+          <span className="text-xs text-claude-tertiary mr-1">Level:</span>
           {SENIORITY_OPTIONS.map((opt) => (
             <button
               key={opt.value}
               onClick={() => set("minSeniority", filters.minSeniority === opt.value ? 1 : opt.value)}
-              className={`px-2 py-1 rounded-md text-xs font-medium transition-colors ${
+              className={`px-2 py-1 rounded-lg text-xs font-medium transition-colors ${
                 filters.minSeniority === opt.value
-                  ? "bg-gray-900 text-white"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  ? "bg-claude-accent text-white"
+                  : "bg-claude-hover text-claude-secondary hover:bg-claude-border"
               }`}
             >
               {opt.label}
@@ -166,15 +166,15 @@ export default function FilterBar({
           ))}
         </div>
 
-        <span className="text-gray-200">|</span>
+        <span className="text-claude-border">|</span>
 
         {/* Work type */}
-        <label className="flex items-center gap-1.5 text-sm text-gray-700 cursor-pointer">
+        <label className="flex items-center gap-1.5 text-sm text-claude-secondary cursor-pointer">
           <input
             type="checkbox"
             checked={filters.remoteOnly}
             onChange={(e) => set("remoteOnly", e.target.checked)}
-            className="rounded accent-gray-900"
+            className="rounded accent-claude-accent"
           />
           <span className="text-xs">Remote only</span>
         </label>
@@ -184,7 +184,7 @@ export default function FilterBar({
       <div className="flex flex-wrap gap-3 items-center">
         {/* Salary range */}
         <div className="flex items-center gap-2 text-sm">
-          <span className="text-xs text-gray-500">Salary:</span>
+          <span className="text-xs text-claude-tertiary">Salary:</span>
           <div className="flex items-center gap-1">
             <input
               type="number"
@@ -194,9 +194,9 @@ export default function FilterBar({
               value={filters.minSalary || ""}
               onChange={(e) => set("minSalary", Number(e.target.value) || 0)}
               placeholder="Min $k"
-              className="border border-gray-300 rounded-md px-2 py-1.5 text-xs w-20"
+              className="border border-claude-border rounded-lg px-2 py-1.5 text-xs w-20"
             />
-            <span className="text-gray-400">-</span>
+            <span className="text-claude-tertiary">-</span>
             <input
               type="number"
               min={0}
@@ -205,21 +205,21 @@ export default function FilterBar({
               value={filters.maxSalary || ""}
               onChange={(e) => set("maxSalary", Number(e.target.value) || 0)}
               placeholder="Max $k"
-              className="border border-gray-300 rounded-md px-2 py-1.5 text-xs w-20"
+              className="border border-claude-border rounded-lg px-2 py-1.5 text-xs w-20"
             />
           </div>
-          <label className="flex items-center gap-1 text-xs text-gray-500 cursor-pointer">
+          <label className="flex items-center gap-1 text-xs text-claude-tertiary cursor-pointer">
             <input
               type="checkbox"
               checked={filters.hideNoSalary}
               onChange={(e) => set("hideNoSalary", e.target.checked)}
-              className="rounded accent-gray-900"
+              className="rounded accent-claude-accent"
             />
             Hide no salary
           </label>
         </div>
 
-        <span className="text-gray-200">|</span>
+        <span className="text-claude-border">|</span>
 
         <MultiSelect
           label="Location"
@@ -235,12 +235,12 @@ export default function FilterBar({
           onChange={(v) => set("companies", v)}
         />
 
-        <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer ml-auto">
+        <label className="flex items-center gap-1.5 text-xs text-claude-tertiary cursor-pointer ml-auto">
           <input
             type="checkbox"
             checked={filters.showDismissed}
             onChange={(e) => set("showDismissed", e.target.checked)}
-            className="rounded accent-gray-900"
+            className="rounded accent-claude-accent"
           />
           Show dismissed
         </label>
@@ -248,19 +248,19 @@ export default function FilterBar({
 
       {/* Active filters + count */}
       {(hasActiveFilters || filteredCount !== totalCount) && (
-        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-gray-100">
-          <span className="text-xs text-gray-500">
+        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-claude-border">
+          <span className="text-xs text-claude-tertiary">
             Showing {filteredCount} of {totalCount} jobs
           </span>
           {chips.map((chip, i) => (
             <span
               key={i}
-              className="inline-flex items-center gap-1 bg-gray-100 text-gray-700 text-xs px-2 py-0.5 rounded-md"
+              className="inline-flex items-center gap-1 bg-claude-hover text-claude-secondary text-xs px-2 py-0.5 rounded-lg"
             >
               {chip.label}
               <button
                 onClick={chip.clear}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-claude-tertiary hover:text-claude-secondary"
               >
                 &times;
               </button>
@@ -269,7 +269,7 @@ export default function FilterBar({
           {hasActiveFilters && (
             <button
               onClick={clearAll}
-              className="text-xs text-gray-500 hover:text-gray-700 underline"
+              className="text-xs text-claude-tertiary hover:text-claude-secondary underline"
             >
               Clear all
             </button>

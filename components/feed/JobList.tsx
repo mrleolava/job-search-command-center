@@ -15,8 +15,8 @@ export default function JobList({ jobs, savedJobIds, onSave, onDismiss, matchedK
   if (jobs.length === 0) {
     return (
       <div className="text-center py-16">
-        <p className="text-gray-500 text-lg">No jobs match your filters.</p>
-        <p className="text-gray-400 text-sm mt-1">Try adjusting your search criteria.</p>
+        <p className="text-claude-secondary text-lg">No jobs match your filters.</p>
+        <p className="text-claude-tertiary text-sm mt-1">Try adjusting your search criteria.</p>
       </div>
     );
   }
