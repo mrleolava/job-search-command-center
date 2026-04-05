@@ -51,14 +51,17 @@ const SENIORITY_OPTIONS = [
 
 const SORT_OPTIONS = [
   { label: "Date Posted", value: "date" },
+  { label: "Salary", value: "salary" },
+  { label: "Seniority", value: "seniority" },
   { label: "Company Fit", value: "companyFit" },
+  { label: "Company (A-Z)", value: "companyAZ" },
+  { label: "Company (Z-A)", value: "companyZA" },
+  { label: "Title (A-Z)", value: "titleAZ" },
+  { label: "Title (Z-A)", value: "titleZA" },
   { label: "PE Exposure", value: "peExposure" },
   { label: "Employee Growth", value: "employeeGrowth" },
   { label: "Glassdoor", value: "glassdoor" },
   { label: "Funding Stage", value: "fundingStage" },
-  { label: "Salary", value: "salary" },
-  { label: "Seniority", value: "seniority" },
-  { label: "Company", value: "company" },
   { label: "Relevance", value: "relevance" },
 ];
 

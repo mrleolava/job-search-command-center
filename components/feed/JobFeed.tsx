@@ -309,8 +309,14 @@ export default function JobFeed() {
         }
         case "seniority":
           return (b.seniority_score ?? 0) - (a.seniority_score ?? 0);
-        case "company":
+        case "companyAZ":
           return (a.company ?? "").localeCompare(b.company ?? "");
+        case "companyZA":
+          return (b.company ?? "").localeCompare(a.company ?? "");
+        case "titleAZ":
+          return (a.title ?? "").localeCompare(b.title ?? "");
+        case "titleZA":
+          return (b.title ?? "").localeCompare(a.title ?? "");
         case "relevance": {
           const scoreA = (a.seniority_score ?? 0) * 10000 + (a.salary_max ?? a.salary_min ?? 0);
           const scoreB = (b.seniority_score ?? 0) * 10000 + (b.salary_max ?? b.salary_min ?? 0);
