@@ -9,6 +9,18 @@ import FilterBar, { FilterState } from "./FilterBar";
 import JobList from "./JobList";
 import { getMatchedKeywords } from "@/lib/scraping";
 
+const PE_RANK: Record<string, number> = {
+  "Core (>50%)": 0,
+  "Significant (20-50%)": 1,
+  "Emerging (<20%)": 2,
+  "None/Unknown": 3,
+};
+
+const FUNDING_RANK: Record<string, number> = {
+  "Series D+": 0, "PE-backed": 1, "Series C": 2, "Series B": 3,
+  "Series A": 4, "Seed": 5, "Public": 6, "Private/Bootstrapped": 7,
+};
+
 function parseFiltersFromParams(params: URLSearchParams): FilterState {
   return {
     search: params.get("q") ?? "",
@@ -22,6 +34,11 @@ function parseFiltersFromParams(params: URLSearchParams): FilterState {
     minSeniority: Number(params.get("sen")) || 1,
     remoteOnly: params.get("remote") === "1",
     showDismissed: params.get("dismissed") === "1",
+    peExposure: params.get("pe") ? params.get("pe")!.split("|") : [],
+    fundingStages: params.get("fund") ? params.get("fund")!.split("|") : [],
+    revenueStages: params.get("rev") ? params.get("rev")!.split("|") : [],
+    minGrowth: params.get("growth") ?? "",
+    minGlassdoor: params.get("gd") ?? "",
   };
 }
 
@@ -38,6 +55,11 @@ function serializeFiltersToParams(f: FilterState): string {
   if (f.minSeniority > 1) p.set("sen", String(f.minSeniority));
   if (f.remoteOnly) p.set("remote", "1");
   if (f.showDismissed) p.set("dismissed", "1");
+  if (f.peExposure.length) p.set("pe", f.peExposure.join("|"));
+  if (f.fundingStages.length) p.set("fund", f.fundingStages.join("|"));
+  if (f.revenueStages.length) p.set("rev", f.revenueStages.join("|"));
+  if (f.minGrowth) p.set("growth", f.minGrowth);
+  if (f.minGlassdoor) p.set("gd", f.minGlassdoor);
   const str = p.toString();
   return str ? `?${str}` : "";
 }
@@ -52,12 +74,10 @@ export default function JobFeed() {
   const [searchConfig, setSearchConfig] = useState<SearchConfig | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Initialize filters from URL params
   const [filters, setFilters] = useState<FilterState>(() =>
     parseFiltersFromParams(searchParams)
   );
 
-  // Sync filters to URL
   const updateFilters = useCallback(
     (newFilters: FilterState) => {
       setFilters(newFilters);
@@ -99,6 +119,15 @@ export default function JobFeed() {
 
   const companySearchEnabled = searchConfig?.company_search_enabled ?? true;
 
+  // Build lookup map: company name (lowercase) -> WatchlistCompany
+  const companyIntelMap = useMemo(() => {
+    const map = new Map<string, WatchlistCompany>();
+    for (const co of watchlistCompanies) {
+      map.set(co.name.toLowerCase(), co);
+    }
+    return map;
+  }, [watchlistCompanies]);
+
   const watchlistNames = useMemo(
     () => new Set(watchlistCompanies.map((c) => c.name.toLowerCase())),
     [watchlistCompanies]
@@ -116,7 +145,6 @@ export default function JobFeed() {
   const descriptionMatchMode = searchConfig?.description_match_mode ?? "OR";
   const crossMatchMode = searchConfig?.cross_match_mode ?? "AND";
 
-  // Derive unique values for filter dropdowns
   const allLocations = useMemo(
     () => Array.from(new Set(jobs.map((j) => j.location).filter(Boolean) as string[])).sort(),
     [jobs]
@@ -179,7 +207,7 @@ export default function JobFeed() {
     }
   }, [jobs, companySearchEnabled, hasWatchlist, watchlistNames, titleKeywords, descriptionKeywords, titleMatchMode, descriptionMatchMode, crossMatchMode, searchConfig]);
 
-  // Apply user filters
+  // Apply user filters (including company intelligence filters)
   const filteredJobs = useMemo(() => {
     const f = filters;
     const result = configFilteredJobs.filter((job) => {
@@ -224,10 +252,35 @@ export default function JobFeed() {
         if (daysAgo > Number(f.dateRange)) return false;
       }
 
+      // Company intelligence filters
+      const intel = job.company ? companyIntelMap.get(job.company.toLowerCase()) : null;
+
+      if (f.peExposure.length > 0) {
+        if (!intel?.pe_revenue_exposure || !f.peExposure.includes(intel.pe_revenue_exposure)) return false;
+      }
+      if (f.fundingStages.length > 0) {
+        if (!intel?.funding_stage || !f.fundingStages.includes(intel.funding_stage)) return false;
+      }
+      if (f.revenueStages.length > 0) {
+        if (!intel?.revenue_stage || !f.revenueStages.includes(intel.revenue_stage)) return false;
+      }
+      if (f.minGrowth) {
+        const threshold = Number(f.minGrowth);
+        if ((intel?.employee_growth_6m ?? 0) <= threshold) return false;
+      }
+      if (f.minGlassdoor) {
+        const threshold = Number(f.minGlassdoor);
+        if ((intel?.glassdoor_rating ?? 0) <= threshold) return false;
+      }
+
       return true;
     });
 
+    // Sorting
     result.sort((a, b) => {
+      const intelA = a.company ? companyIntelMap.get(a.company.toLowerCase()) : null;
+      const intelB = b.company ? companyIntelMap.get(b.company.toLowerCase()) : null;
+
       switch (f.sortBy) {
         case "date": {
           const da = a.date_posted ? new Date(a.date_posted).getTime() : 0;
@@ -248,13 +301,29 @@ export default function JobFeed() {
           const scoreB = (b.seniority_score ?? 0) * 10000 + (b.salary_max ?? b.salary_min ?? 0);
           return scoreB - scoreA;
         }
+        case "companyFit":
+          return (intelB?.company_fit_score ?? 0) - (intelA?.company_fit_score ?? 0);
+        case "peExposure": {
+          const rankA = PE_RANK[intelA?.pe_revenue_exposure ?? ""] ?? 99;
+          const rankB = PE_RANK[intelB?.pe_revenue_exposure ?? ""] ?? 99;
+          return rankA - rankB;
+        }
+        case "employeeGrowth":
+          return (intelB?.employee_growth_6m ?? -999) - (intelA?.employee_growth_6m ?? -999);
+        case "glassdoor":
+          return (intelB?.glassdoor_rating ?? 0) - (intelA?.glassdoor_rating ?? 0);
+        case "fundingStage": {
+          const rankA = FUNDING_RANK[intelA?.funding_stage ?? ""] ?? 99;
+          const rankB = FUNDING_RANK[intelB?.funding_stage ?? ""] ?? 99;
+          return rankA - rankB;
+        }
         default:
           return 0;
       }
     });
 
     return result;
-  }, [configFilteredJobs, filters]);
+  }, [configFilteredJobs, filters, companyIntelMap]);
 
   const jobMatchedKeywords = useMemo(() => {
     const map = new Map<string, { title: string[]; description: string[] }>();
@@ -369,6 +438,7 @@ export default function JobFeed() {
           onSave={handleSave}
           onDismiss={handleDismiss}
           matchedKeywords={jobMatchedKeywords}
+          companyIntelMap={companyIntelMap}
         />
       )}
     </div>

@@ -1,7 +1,8 @@
 "use client";
 
-import { Job } from "@/lib/types";
-import { timeAgo, formatSalary, applicantColor, seniorityBadge } from "@/lib/utils";
+import { useState } from "react";
+import { Job, WatchlistCompany } from "@/lib/types";
+import { timeAgo, formatSalary, applicantColor, seniorityBadge, fundingStageBadge, growthIndicator } from "@/lib/utils";
 
 interface JobCardProps {
   job: Job;
@@ -9,12 +10,12 @@ interface JobCardProps {
   onDismiss: (job: Job) => void;
   isSaved: boolean;
   matchedKeywords?: { title: string[]; description: string[] };
+  companyIntel?: WatchlistCompany | null;
 }
 
 function highlightText(text: string, keywords: string[]): React.ReactNode {
   if (!keywords.length) return text;
 
-  // Build a regex that matches any keyword (case-insensitive)
   const escaped = keywords.map((kw) =>
     kw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
   );
@@ -36,11 +37,100 @@ function highlightText(text: string, keywords: string[]): React.ReactNode {
   });
 }
 
-export default function JobCard({ job, onSave, onDismiss, isSaved, matchedKeywords }: JobCardProps) {
+function CompanyIntelBar({ co }: { co: WatchlistCompany }) {
+  const [expanded, setExpanded] = useState(false);
+  const stageBadge = fundingStageBadge(co.funding_stage);
+  const growth = growthIndicator(co.employee_growth_6m);
+  const peTarget = co.pe_revenue_exposure?.startsWith("Core") || co.pe_revenue_exposure?.startsWith("Significant");
+  const hiringSpree = (co.employee_growth_6m ?? 0) > 15;
+
+  return (
+    <div className="mt-2 bg-claude-bg border border-claude-border rounded-lg px-3 py-2 text-xs">
+      {/* Row 1: Stage + Raised + Employees + Growth */}
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-claude-secondary">
+        {stageBadge && (
+          <span className={`inline-flex items-center px-1.5 py-0 rounded text-[10px] font-medium ${stageBadge.color}`}>
+            {stageBadge.label}
+          </span>
+        )}
+        <span>{co.total_raised ?? "\u2014"} raised</span>
+        <span className="text-claude-border">&middot;</span>
+        <span>
+          {co.total_employees != null ? `${co.total_employees} employees` : "\u2014 employees"}
+          {co.employee_growth_6m != null && (
+            <span className={`ml-1 font-medium ${growth.color}`}>
+              {growth.icon}{Math.abs(co.employee_growth_6m).toFixed(0)}%
+            </span>
+          )}
+          {hiringSpree && " \uD83D\uDD25"}
+        </span>
+        {co.company_fit_score != null && co.company_fit_score > 0 && (
+          <>
+            <span className="text-claude-border">&middot;</span>
+            <span className="font-medium text-claude-accent">Fit: {co.company_fit_score}</span>
+          </>
+        )}
+      </div>
+      {/* Row 2: PE Exposure + Investors */}
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-claude-secondary">
+        {co.pe_revenue_exposure && (
+          <span>PE: {co.pe_revenue_exposure}{peTarget ? " \uD83C\uDFAF" : ""}</span>
+        )}
+        {co.key_investors && (
+          <>
+            <span className="text-claude-border">&middot;</span>
+            <span>Investors: {co.key_investors}</span>
+          </>
+        )}
+      </div>
+      {/* Row 3: Revenue + Glassdoor */}
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-claude-secondary">
+        <span>Revenue: {co.revenue_stage ?? "\u2014"}</span>
+        <span className="text-claude-border">&middot;</span>
+        <span>
+          Glassdoor: {co.glassdoor_rating != null ? (
+            co.glassdoor_url ? (
+              <a href={co.glassdoor_url} target="_blank" rel="noopener noreferrer" className="text-claude-accent hover:underline">
+                {co.glassdoor_rating.toFixed(1)}{"\u2605"}
+              </a>
+            ) : `${co.glassdoor_rating.toFixed(1)}\u2605`
+          ) : "\u2014"}
+        </span>
+      </div>
+
+      {/* Expand toggle */}
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="mt-1 text-[10px] text-claude-tertiary hover:text-claude-secondary"
+      >
+        {expanded ? "Hide details" : "Company Details"}
+      </button>
+
+      {expanded && (
+        <div className="mt-2 pt-2 border-t border-claude-border grid grid-cols-2 gap-x-4 gap-y-1 text-claude-secondary">
+          {co.headquarters && <div><span className="text-claude-tertiary">HQ:</span> {co.headquarters}</div>}
+          {co.year_founded && <div><span className="text-claude-tertiary">Founded:</span> {co.year_founded}</div>}
+          {co.ceo_name && <div><span className="text-claude-tertiary">CEO:</span> {co.ceo_name}</div>}
+          {co.cro_name && <div><span className="text-claude-tertiary">CRO:</span> {co.cro_name}</div>}
+          {co.last_funding_amount && <div><span className="text-claude-tertiary">Last Round:</span> {co.last_funding_amount}</div>}
+          {co.last_funding_date && <div><span className="text-claude-tertiary">Funded:</span> {co.last_funding_date}</div>}
+          {co.competitors && <div className="col-span-2"><span className="text-claude-tertiary">Competitors:</span> {co.competitors}</div>}
+          {co.tech_stack && <div className="col-span-2"><span className="text-claude-tertiary">Tech:</span> {co.tech_stack}</div>}
+          {co.recent_news && <div className="col-span-2"><span className="text-claude-tertiary">News:</span> {co.recent_news}</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function JobCard({ job, onSave, onDismiss, isSaved, matchedKeywords, companyIntel }: JobCardProps) {
   const salary = formatSalary(job.salary_min, job.salary_max);
   const badge = seniorityBadge(job.seniority_score);
   const titleKw = matchedKeywords?.title ?? [];
   const descKw = matchedKeywords?.description ?? [];
+
+  const companyName = job.company ?? "";
+  const linkedinUrl = companyIntel?.linkedin_url;
 
   return (
     <div
@@ -50,7 +140,13 @@ export default function JobCard({ job, onSave, onDismiss, isSaved, matchedKeywor
     >
       <div className="flex justify-between items-start gap-4">
         <div className="flex-1 min-w-0">
-          <div className="text-sm text-claude-tertiary font-medium">{job.company}</div>
+          <div className="text-sm text-claude-tertiary font-medium">
+            {linkedinUrl ? (
+              <a href={linkedinUrl} target="_blank" rel="noopener noreferrer" className="hover:underline hover:text-claude-accent">
+                {companyName}
+              </a>
+            ) : companyName}
+          </div>
           <h3 className="font-semibold text-claude-primary mt-0.5">
             {job.url ? (
               <a
@@ -122,6 +218,7 @@ export default function JobCard({ job, onSave, onDismiss, isSaved, matchedKeywor
               ))
             )}
           </div>
+          {companyIntel && <CompanyIntelBar co={companyIntel} />}
         </div>
         <div className="flex flex-col gap-2 shrink-0">
           <button

@@ -1,6 +1,6 @@
 "use client";
 
-import { Job } from "@/lib/types";
+import { Job, WatchlistCompany } from "@/lib/types";
 import JobCard from "./JobCard";
 
 interface JobListProps {
@@ -9,9 +9,10 @@ interface JobListProps {
   onSave: (job: Job) => void;
   onDismiss: (job: Job) => void;
   matchedKeywords?: Map<string, { title: string[]; description: string[] }>;
+  companyIntelMap?: Map<string, WatchlistCompany>;
 }
 
-export default function JobList({ jobs, savedJobIds, onSave, onDismiss, matchedKeywords }: JobListProps) {
+export default function JobList({ jobs, savedJobIds, onSave, onDismiss, matchedKeywords, companyIntelMap }: JobListProps) {
   if (jobs.length === 0) {
     return (
       <div className="text-center py-16">
@@ -31,6 +32,7 @@ export default function JobList({ jobs, savedJobIds, onSave, onDismiss, matchedK
           onSave={onSave}
           onDismiss={onDismiss}
           matchedKeywords={matchedKeywords?.get(job.id)}
+          companyIntel={job.company ? companyIntelMap?.get(job.company.toLowerCase()) ?? null : null}
         />
       ))}
     </div>

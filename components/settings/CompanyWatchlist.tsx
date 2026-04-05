@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { WatchlistCompany } from "@/lib/types";
 import { createClient } from "@/lib/supabase";
-import CompanyForm from "./CompanyForm";
+import { fundingStageBadge } from "@/lib/utils";
+import CompanyDetailEditor from "./CompanyDetailEditor";
 import BulkAddForm from "./BulkAddForm";
 
 interface CompanyWatchlistProps {
@@ -18,41 +19,30 @@ export default function CompanyWatchlist({
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [localCompanies, setLocalCompanies] = useState(companies);
   const supabase = createClient();
+
+  // Keep local state in sync with props
+  if (companies !== localCompanies && !editingId) {
+    setLocalCompanies(companies);
+  }
 
   function handleAddComplete() {
     setShowAddForm(false);
     onUpdate();
   }
 
-  async function handleEdit(
-    id: string,
-    data: {
-      name: string;
-      greenhouse_slug: string | null;
-      ashby_slug: string | null;
-      lever_slug: string | null;
-      website: string | null;
-    }
-  ): Promise<string | null> {
-    const { error } = await supabase
-      .from("watchlist_companies")
-      .update(data)
-      .eq("id", id);
-    if (error) {
-      console.error("Failed to update company:", error);
-      return null;
-    }
-    return id;
+  function handleDetailUpdate(updated: WatchlistCompany) {
+    setLocalCompanies((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
   }
 
-  function handleEditComplete() {
+  function handleEditDone() {
     setEditingId(null);
     onUpdate();
   }
 
   async function handleDelete(id: string) {
-    const company = companies.find((c) => c.id === id);
+    const company = localCompanies.find((c) => c.id === id);
 
     const { error } = await supabase
       .from("watchlist_companies")
@@ -82,7 +72,7 @@ export default function CompanyWatchlist({
     <div>
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-semibold text-claude-primary">
-          Watchlist Companies ({companies.length})
+          Watchlist Companies ({localCompanies.length})
         </h3>
         {!showAddForm && (
           <button
@@ -97,7 +87,7 @@ export default function CompanyWatchlist({
       {showAddForm && (
         <div className="mb-4">
           <BulkAddForm
-            existingCompanies={companies}
+            existingCompanies={localCompanies}
             onComplete={handleAddComplete}
             onCancel={() => setShowAddForm(false)}
           />
@@ -105,22 +95,33 @@ export default function CompanyWatchlist({
       )}
 
       <div className="space-y-2">
-        {companies.map((co) =>
+        {localCompanies.map((co) =>
           editingId === co.id ? (
-            <CompanyForm
+            <CompanyDetailEditor
               key={co.id}
               company={co}
-              onSave={(data) => handleEdit(co.id, data)}
-              onComplete={handleEditComplete}
-              onCancel={() => setEditingId(null)}
+              onUpdate={handleDetailUpdate}
+              onCancel={handleEditDone}
             />
           ) : (
             <div
               key={co.id}
               className="flex items-center justify-between bg-white border border-claude-border rounded-xl px-4 py-3"
             >
-              <div>
-                <span className="font-medium text-claude-primary text-sm">{co.name}</span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-claude-primary text-sm">{co.name}</span>
+                  {fundingStageBadge(co.funding_stage) && (
+                    <span className={`inline-flex items-center px-1.5 py-0 rounded text-[10px] font-medium ${fundingStageBadge(co.funding_stage)!.color}`}>
+                      {fundingStageBadge(co.funding_stage)!.label}
+                    </span>
+                  )}
+                  {co.company_fit_score != null && co.company_fit_score > 0 && (
+                    <span className="text-[10px] font-medium text-claude-accent">
+                      Fit: {co.company_fit_score}
+                    </span>
+                  )}
+                </div>
                 <div className="flex gap-3 mt-0.5 text-xs text-claude-tertiary">
                   {co.greenhouse_slug && <span>greenhouse: {co.greenhouse_slug}</span>}
                   {co.lever_slug && <span>lever: {co.lever_slug}</span>}
@@ -129,6 +130,8 @@ export default function CompanyWatchlist({
                   {!co.greenhouse_slug && !co.ashby_slug && !co.lever_slug && (
                     <span className="text-amber-600">No scraper slug</span>
                   )}
+                  {co.total_employees && <span>{co.total_employees} employees</span>}
+                  {co.pe_revenue_exposure && <span>PE: {co.pe_revenue_exposure}</span>}
                 </div>
               </div>
               <div className="flex gap-1">
@@ -165,7 +168,7 @@ export default function CompanyWatchlist({
             </div>
           )
         )}
-        {companies.length === 0 && (
+        {localCompanies.length === 0 && (
           <p className="text-sm text-claude-tertiary py-4 text-center">
             No companies yet. Add one to start scraping jobs.
           </p>
