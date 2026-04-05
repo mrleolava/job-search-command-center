@@ -109,8 +109,14 @@ export async function POST(request: Request) {
     }
 
     // Filter with boolean logic
+    // Track per-step counts for diagnostics
+    let afterExclude = 0;
+    let afterLocation = 0;
+
     const filtered = allRaw.filter((job) => {
       if (matchesExcludes(job.title, excludeKeywords)) return false;
+      afterExclude++;
+
       if (
         !matchesLocation(
           job.location,
@@ -121,6 +127,7 @@ export async function POST(request: Request) {
         )
       )
         return false;
+      afterLocation++;
 
       const hasTitleKw = titleKeywords.length > 0;
       const hasDescKw = descriptionKeywords.length > 0;
@@ -130,10 +137,15 @@ export async function POST(request: Request) {
       const titleMatch =
         !hasTitleKw ||
         matchesKeywords(job.title, titleKeywords, titleMatchMode);
+
+      // If description is empty/null, auto-pass the description check
+      // (don't penalize jobs with missing descriptions)
+      const descEmpty = !job.description || job.description.trim().length === 0;
       const descMatch =
         !hasDescKw ||
+        descEmpty ||
         matchesKeywords(
-          job.description ?? "",
+          job.description!,
           descriptionKeywords,
           descriptionMatchMode
         );
@@ -144,19 +156,42 @@ export async function POST(request: Request) {
       return titleMatch || descMatch;
     });
 
-    // Score seniority and remove entry-level
+    // Score seniority
     const scored = filtered.map((j) => ({
       ...j,
       seniority_score: computeSeniorityScore(j.title, j.description),
     }));
-    const senior = scored.filter((j) => j.seniority_score > 0);
+
+    // In keyword mode: keep all non-entry-level jobs (score >= 0) but
+    // only hard-filter entry-level in company mode where results are more targeted
+    const senior = companySearchEnabled
+      ? scored.filter((j) => j.seniority_score > 0)
+      : scored.filter((j) => {
+          // Still remove explicitly entry-level (score 0 WITH entry-level signals)
+          const t = (j.title ?? "").toLowerCase();
+          const ENTRY_SIGNALS = [
+            "entry level", "entry-level", "junior", "intern", "internship",
+            "new grad", "graduate",
+          ];
+          const isExplicitlyEntry = ENTRY_SIGNALS.some((s) => t.includes(s)) ||
+            /\b(bdr|sdr)\b/i.test(t);
+          return !isExplicitlyEntry;
+        });
+
+    // Count empty descriptions for diagnostics
+    const emptyDescCount = allRaw.filter(
+      (j) => !j.description || j.description.trim().length === 0
+    ).length;
 
     if (senior.length === 0) {
       return NextResponse.json({
         mode: companySearchEnabled ? "company" : "keyword",
         fetched: allRaw.length,
+        afterExclude,
+        afterLocation,
         filtered: filtered.length,
         afterSeniority: 0,
+        emptyDescriptions: emptyDescCount,
         inserted: 0,
       });
     }
@@ -239,8 +274,11 @@ export async function POST(request: Request) {
     return NextResponse.json({
       mode: companySearchEnabled ? "company" : "keyword",
       fetched: allRaw.length,
+      afterExclude,
+      afterLocation,
       filtered: filtered.length,
       afterSeniority: senior.length,
+      emptyDescriptions: emptyDescCount,
       alreadyInDb: senior.length - newJobs.length,
       inserted,
       salaryUpdated,

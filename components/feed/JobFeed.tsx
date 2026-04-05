@@ -200,7 +200,8 @@ export default function JobFeed() {
               : titleKeywords.some((kw) => lower.includes(kw));
           })();
           const descMatch = !hasDescKw || (() => {
-            if (!job.description) return false;
+            // Auto-pass if description is empty (don't penalize missing data)
+            if (!job.description || job.description.trim().length === 0) return true;
             const lower = job.description.toLowerCase();
             return descriptionMatchMode === "AND"
               ? descriptionKeywords.every((kw) => lower.includes(kw))
@@ -235,7 +236,8 @@ export default function JobFeed() {
               : titleKeywords.some((kw) => lower.includes(kw));
           })();
           const descMatch = !hasDescKw || (() => {
-            if (!job.description) return false;
+            // Auto-pass if description is empty (don't penalize missing data)
+            if (!job.description || job.description.trim().length === 0) return true;
             const lower = job.description.toLowerCase();
             return descriptionMatchMode === "AND"
               ? descriptionKeywords.every((kw) => lower.includes(kw))
