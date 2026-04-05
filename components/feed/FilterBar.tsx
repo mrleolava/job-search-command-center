@@ -14,6 +14,7 @@ export interface FilterState {
   hideNoSalary: boolean;
   minSeniority: number;
   remoteOnly: boolean;
+  hybridOnly: boolean;
   showDismissed: boolean;
   peExposure: string[];
   fundingStages: string[];
@@ -26,6 +27,7 @@ interface FilterBarProps {
   filters: FilterState;
   onChange: (filters: FilterState) => void;
   allLocations: string[];
+  locationCounts: Record<string, number>;
   allCompanies: string[];
   totalCount: number;
   filteredCount: number;
@@ -98,6 +100,7 @@ export default function FilterBar({
   filters,
   onChange,
   allLocations,
+  locationCounts,
   allCompanies,
   totalCount,
   filteredCount,
@@ -129,6 +132,7 @@ export default function FilterBar({
   if (filters.dateRange) activeCount++;
   if (filters.minSeniority > 1) activeCount++;
   if (filters.remoteOnly) activeCount++;
+  if (filters.hybridOnly) activeCount++;
   if (filters.minSalary > 0) activeCount++;
   if (filters.maxSalary > 0) activeCount++;
   if (filters.hideNoSalary) activeCount++;
@@ -153,6 +157,7 @@ export default function FilterBar({
     chips.push({ label: s?.label ?? `Seniority ${filters.minSeniority}+`, clear: () => set("minSeniority", 1) });
   }
   if (filters.remoteOnly) chips.push({ label: "Remote", clear: () => set("remoteOnly", false) });
+  if (filters.hybridOnly) chips.push({ label: "Hybrid", clear: () => set("hybridOnly", false) });
   if (filters.minSalary > 0) chips.push({ label: `>$${filters.minSalary}k`, clear: () => set("minSalary", 0) });
   if (filters.maxSalary > 0) chips.push({ label: `<$${filters.maxSalary}k`, clear: () => set("maxSalary", 0) });
   if (filters.hideNoSalary) chips.push({ label: "Has salary", clear: () => set("hideNoSalary", false) });
@@ -181,7 +186,7 @@ export default function FilterBar({
     onChange({
       search: "", sortBy: "date", locations: [], companies: [], dateRange: "",
       minSalary: 0, maxSalary: 0, hideNoSalary: false, minSeniority: 1,
-      remoteOnly: false, showDismissed: false,
+      remoteOnly: false, hybridOnly: false, showDismissed: false,
       peExposure: [], fundingStages: [], revenueStages: [], minGrowth: "", minGlassdoor: "",
     });
   }
@@ -253,12 +258,18 @@ export default function FilterBar({
             </button>
           ))}
           <Sep />
-          {/* Remote */}
+          {/* Remote + Hybrid */}
           <button
             onClick={() => set("remoteOnly", !filters.remoteOnly)}
             className={`${pill} ${filters.remoteOnly ? on : off}`}
           >
             Remote
+          </button>
+          <button
+            onClick={() => set("hybridOnly", !filters.hybridOnly)}
+            className={`${pill} ${filters.hybridOnly ? on : off}`}
+          >
+            Hybrid
           </button>
           <Sep />
           {/* Salary */}
@@ -283,7 +294,7 @@ export default function FilterBar({
           </div>
           <Sep />
           {/* Location + Company */}
-          <MultiSelect label="Location" options={allLocations} selected={filters.locations} onChange={(v) => set("locations", v)} />
+          <MultiSelect label="Location" options={allLocations} selected={filters.locations} onChange={(v) => set("locations", v)} counts={locationCounts} />
           <MultiSelect label="Company" options={allCompanies} selected={filters.companies} onChange={(v) => set("companies", v)} />
           <Sep />
           {/* PE */}

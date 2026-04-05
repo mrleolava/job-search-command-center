@@ -8,6 +8,7 @@ import { PROFILE_ID, PROFILE_SLUG } from "@/lib/profile";
 import FilterBar, { FilterState } from "./FilterBar";
 import JobList from "./JobList";
 import { getMatchedKeywords } from "@/lib/scraping";
+import { isHybridLocation } from "@/lib/locations";
 
 const PE_RANK: Record<string, number> = {
   "Core (>50%)": 0,
@@ -33,6 +34,7 @@ function parseFiltersFromParams(params: URLSearchParams): FilterState {
     hideNoSalary: params.get("noSal") === "1",
     minSeniority: Number(params.get("sen")) || 1,
     remoteOnly: params.get("remote") === "1",
+    hybridOnly: params.get("hybrid") === "1",
     showDismissed: params.get("dismissed") === "1",
     peExposure: params.get("pe") ? params.get("pe")!.split("|") : [],
     fundingStages: params.get("fund") ? params.get("fund")!.split("|") : [],
@@ -54,6 +56,7 @@ function serializeFiltersToParams(f: FilterState): string {
   if (f.hideNoSalary) p.set("noSal", "1");
   if (f.minSeniority > 1) p.set("sen", String(f.minSeniority));
   if (f.remoteOnly) p.set("remote", "1");
+  if (f.hybridOnly) p.set("hybrid", "1");
   if (f.showDismissed) p.set("dismissed", "1");
   if (f.peExposure.length) p.set("pe", f.peExposure.join("|"));
   if (f.fundingStages.length) p.set("fund", f.fundingStages.join("|"));
@@ -145,10 +148,20 @@ export default function JobFeed() {
   const descriptionMatchMode = searchConfig?.description_match_mode ?? "OR";
   const crossMatchMode = searchConfig?.cross_match_mode ?? "AND";
 
-  const allLocations = useMemo(
-    () => Array.from(new Set(jobs.map((j) => j.location).filter(Boolean) as string[])).sort(),
-    [jobs]
-  );
+  // Build normalized location list with counts
+  const { allLocations, locationCounts } = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const job of jobs) {
+      const norm = job.normalized_location;
+      if (!norm) continue;
+      for (const city of norm.split(",")) {
+        if (city) counts[city] = (counts[city] ?? 0) + 1;
+      }
+    }
+    // Sort by count descending
+    const sorted = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
+    return { allLocations: sorted, locationCounts: counts };
+  }, [jobs]);
   const allCompanies = useMemo(
     () => Array.from(new Set(jobs.map((j) => j.company).filter(Boolean) as string[])).sort(),
     [jobs]
@@ -224,7 +237,8 @@ export default function JobFeed() {
       }
 
       if (f.locations.length > 0) {
-        if (!job.location || !f.locations.some((loc) => job.location === loc)) return false;
+        const normCities = job.normalized_location?.split(",") ?? [];
+        if (!f.locations.some((loc) => normCities.includes(loc))) return false;
       }
 
       if (f.companies.length > 0) {
@@ -244,6 +258,7 @@ export default function JobFeed() {
       }
 
       if (f.remoteOnly && !job.is_remote) return false;
+      if (f.hybridOnly && !isHybridLocation(job.location)) return false;
 
       if (f.dateRange && job.date_posted) {
         const daysAgo = Math.floor(
@@ -387,6 +402,7 @@ export default function JobFeed() {
         filters={filters}
         onChange={updateFilters}
         allLocations={allLocations}
+        locationCounts={locationCounts}
         allCompanies={allCompanies}
         totalCount={configFilteredJobs.length}
         filteredCount={filteredJobs.length}

@@ -16,6 +16,7 @@ export interface Job {
   relevance_score: number | null;
   application_count: number | null;
   seniority_score: number | null;
+  normalized_location: string | null;
   is_dismissed: boolean;
   created_at: string;
 }

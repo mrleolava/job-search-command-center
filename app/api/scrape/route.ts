@@ -13,6 +13,7 @@ import {
   RawJob,
 } from "@/lib/scraping";
 import { computeSeniorityScore } from "@/lib/utils";
+import { normalizeLocation } from "@/lib/locations";
 import { PROFILE_ID } from "@/lib/profile";
 
 const supabase = createClient(
@@ -196,6 +197,7 @@ export async function POST(request: Request) {
         title: j.title,
         url: j.url,
         location: j.location,
+        normalized_location: normalizeLocation(j.location),
         date_posted: j.date_posted,
         source: j.source,
         is_remote: j.is_remote,

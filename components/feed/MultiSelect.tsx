@@ -7,9 +7,10 @@ interface MultiSelectProps {
   options: string[];
   selected: string[];
   onChange: (selected: string[]) => void;
+  counts?: Record<string, number>;
 }
 
-export default function MultiSelect({ label, options, selected, onChange }: MultiSelectProps) {
+export default function MultiSelect({ label, options, selected, onChange, counts }: MultiSelectProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const ref = useRef<HTMLDivElement>(null);
@@ -79,7 +80,12 @@ export default function MultiSelect({ label, options, selected, onChange }: Mult
                     onChange={() => toggle(option)}
                     className="rounded accent-claude-accent"
                   />
-                  <span className="truncate">{option}</span>
+                  <span className="truncate">
+                    {option}
+                    {counts?.[option] != null && (
+                      <span className="text-claude-tertiary ml-1">({counts[option]})</span>
+                    )}
+                  </span>
                 </label>
               ))
             )}
